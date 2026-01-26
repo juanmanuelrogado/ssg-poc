@@ -172,7 +172,7 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
   return processedCss;
 }
 
-export async function rewriteAndDownloadAssets(html: string, baseUrl: string, discoveredCssUrls: string[], discoveredJsUrls: string[]): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
+export async function rewriteAndDownloadAssets(html: string, baseUrl: string, discoveredCssUrls: string[], discoveredJsUrls: string[], allFriendlyUrlPaths: Set<string>): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
   const $ = cheerio.load(html);
 
   const assetPromises: Promise<void>[] = [];
@@ -216,8 +216,47 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
   // Handle <a href="...">
   $('a').each((_i, a) => {
     const href = $(a).attr('href');
-    if (href && href.startsWith('/')) {
-      $(a).attr('href', new URL(href, baseUrl).toString());
+    if (href) {
+      let finalHref = href;
+      let isInternalLink = false;
+      let potentialPath: string | undefined;
+
+      try {
+        // Fully qualified URL, absolute path, or relative path
+        const url = new URL(href, href.startsWith('/') ? baseUrl : undefined);
+
+        if (url.hostname === new URL(baseUrl).hostname) {
+          // This is a link to the Liferay instance, let's process it.
+          potentialPath = url.pathname;
+        }
+        // If hostnames don't match, it's an external link, so we'll leave finalHref as is.
+      } catch (e) {
+        // Not a valid URL or path, e.g., an anchor #, leave it as is.
+      }
+      
+      if (potentialPath) {
+        // Case 1: Liferay's /web/guest/ path
+        const liferayGuestPathMatch = potentialPath.match(/^\/web\/guest(\/.*)/);
+        if (liferayGuestPathMatch) {
+            const friendlyUrlPath = liferayGuestPathMatch[1];
+            if (allFriendlyUrlPaths.has(friendlyUrlPath)) {
+                finalHref = `/pages${friendlyUrlPath}`;
+                isInternalLink = true;
+            }
+        } 
+        // Case 2: Direct relative path that matches a friendlyUrlPath
+        else if (allFriendlyUrlPaths.has(potentialPath)) {
+            finalHref = `/pages${potentialPath}`;
+            isInternalLink = true;
+        }
+      }
+
+      // If it was a relative link pointing to Liferay that we did not statify, make it absolute.
+      if (!isInternalLink && href.startsWith('/')) {
+        finalHref = new URL(href, baseUrl).toString();
+      }
+      
+      $(a).attr('href', finalHref);
     }
   });
 
@@ -267,7 +306,7 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
   return { html: $.html(), extractedStyles: extractedStyleContents, extractedLinkStyles: extractedLinkStylePaths, extractedScriptPaths };
 }
 
-export async function getLiferayScrapedContent(publicPageUrl: string): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
+export async function getLiferayScrapedContent(publicPageUrl: string, allFriendlyUrlPaths: Set<string>): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
   try {
     const { html: fullHtml, discoveredCssUrls, discoveredJsUrls } = await getLiferayFullPageHtml(publicPageUrl);
     console.log('--- Full HTML from Puppeteer (snippet) for', publicPageUrl, '---');
@@ -281,7 +320,7 @@ export async function getLiferayScrapedContent(publicPageUrl: string): Promise<{
     console.log('--- End Discovered JS URLs ---');
 
 
-    const { html: processedHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await rewriteAndDownloadAssets(fullHtml, LIFERAY_HOST!, discoveredCssUrls, discoveredJsUrls); 
+    const { html: processedHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await rewriteAndDownloadAssets(fullHtml, LIFERAY_HOST!, discoveredCssUrls, discoveredJsUrls, allFriendlyUrlPaths); 
     
     const $ = cheerio.load(processedHtml);
     const bodyContent = $('body').html() || '';

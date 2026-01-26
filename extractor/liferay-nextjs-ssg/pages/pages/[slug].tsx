@@ -28,9 +28,14 @@ interface PageProps {
   extractedScriptPaths?: string[]; // Prop for linked JS (local paths)
 }
 
-const siteId = 20118; // Your Liferay Site ID
+
 
 export const getStaticPaths: GetStaticPaths = async () => {
+  const siteId = process.env.LIFERAY_SITE_ID;
+  if (!siteId) {
+    throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+  }
+
   let liferayPages: { friendlyUrlPath: string }[] = [];
   try {
     const sitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`); // Use new API content getter
@@ -55,14 +60,23 @@ export const getStaticPaths: GetStaticPaths = async () => {
 };
 
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
+  const siteId = process.env.LIFERAY_SITE_ID;
+  if (!siteId) {
+    throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+  }
+
   const slug = params?.slug as string;
   const friendlyUrlPath = `/${slug}`;
 
   try {
-    const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`); // Use new API content getter
+    const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`);
     let targetPage: ILiferayApiPage | undefined;
+    const allFriendlyUrlPaths = new Set<string>();
 
     if (allSitePagesResponse && allSitePagesResponse.items) {
+      allSitePagesResponse.items.forEach((page: ILiferayApiPage) => {
+        allFriendlyUrlPaths.add(page.friendlyUrlPath);
+      });
       targetPage = allSitePagesResponse.items.find((page: ILiferayApiPage) => page.friendlyUrlPath === friendlyUrlPath);
     }
     
@@ -70,7 +84,7 @@ export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
       // Construct the public-facing URL for Puppeteer
       const publicLiferayPageUrl = `${process.env.LIFERAY_HOST}/web/guest${friendlyUrlPath}`; // Use LIFERAY_HOST
       
-      const { html: rawHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await getLiferayScrapedContent(publicLiferayPageUrl); // Use new scraped content getter
+      const { html: rawHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await getLiferayScrapedContent(publicLiferayPageUrl, allFriendlyUrlPaths); // Pass allFriendlyUrlPaths
       const renderedHtml = DOMPurify.sanitize(rawHtml);
 
       return {
