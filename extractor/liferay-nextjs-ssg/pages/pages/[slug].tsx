@@ -146,9 +146,7 @@ const LiferayPage = ({ pageData, error, extractedStyles, extractedLinkStyles, ex
       </Head>
       {/* Minimal wrapper to avoid interference from Next.js's default styles/layout */}
       <div className="liferay-extracted-page">
-        <h1 className="text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50 mb-4">
-          Liferay Page: {pageData!.title} ({pageData!.friendlyUrlPath})
-        </h1>
+
         <div
           className="prose dark:prose-invert" // Use Tailwind Typography if available, or custom styles
           dangerouslySetInnerHTML={{ __html: pageData!.renderedHtml }}

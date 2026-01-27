@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Buffer } from 'buffer';
 import * as cheerio from 'cheerio';
 import * as path from 'path';
@@ -102,13 +103,9 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
     return '';
   }
 
-  const urlObj = new URL(originalAbsoluteUrl);
-  const urlPath = urlObj.pathname;
-  const filename = path.basename(urlPath);
-  const fileExtension = path.extname(filename);
-  const baseFilename = path.basename(filename, fileExtension);
-  const hash = Buffer.from(originalAbsoluteUrl).toString('base64url').substring(0, 10);
-  const localFilename = `${baseFilename}-${hash}${fileExtension}`;
+  const hash = createHash('sha256').update(originalAbsoluteUrl).digest('hex'); // Use SHA256 hash
+  const extension = assetType === 'styles' ? '.css' : assetType === 'scripts' ? '.js' : path.extname(new URL(originalAbsoluteUrl).pathname);
+  const localFilename = `${hash}${extension}`; // Use the full hash
 
   const localDir = path.join(process.cwd(), 'public', 'assets', assetType);
   const localFilePath = path.join(localDir, localFilename);
@@ -210,6 +207,26 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
       assetPromises.push(Promise.all(rewrittenSrcsetPromises).then(rewrittenParts => {
         $(source).attr('srcset', rewrittenParts.join(', '));
       }));
+    }
+  });
+
+  // Handle <svg><use href="..."> tags and download SVG sprites
+  $('svg use').each((_i, use) => {
+    const href = $(use).attr('href');
+    if (href) {
+      const parts = href.split('#');
+      const baseUrl = parts[0]; // e.g., http://localhost:8080/o/classic-theme/images/clay/icons.svg
+      const fragment = parts[1] ? `#${parts[1]}` : ''; // e.g., #user
+
+      // Only process internal SVG sprites that have a base URL
+      if (baseUrl && baseUrl.startsWith(LIFERAY_HOST!)) {
+        const originalAbsoluteUrl = baseUrl;
+        assetPromises.push(
+          downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(newLocalPath => {
+            $(use).attr('href', `${newLocalPath}${fragment}`);
+          })
+        );
+      }
     }
   });
 
