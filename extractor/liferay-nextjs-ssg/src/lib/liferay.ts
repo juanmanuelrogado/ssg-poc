@@ -5,6 +5,9 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import puppeteer from 'puppeteer';
 
+// Store SVG sprite contents globally for inlining
+const svgSpriteContents = new Map<string, string>();
+
 const LIFERAY_API_ENDPOINT = process.env.LIFERAY_API_ENDPOINT;
 const LIFERAY_HOST = process.env.LIFERAY_HOST;
 const LIFERAY_API_EMAIL = process.env.LIFERAY_API_EMAIL;
@@ -116,6 +119,12 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
   try {
     try {
       await fs.access(localFilePath);
+      console.log(`Asset already exists: ${publicPath}`); // ADDED LOG
+      // If the asset is an SVG, retrieve its content and store it in the map if not already there
+      if (originalAbsoluteUrl.endsWith('.svg') && !svgSpriteContents.has(originalAbsoluteUrl)) {
+        const content = await fs.readFile(localFilePath, 'utf8');
+        svgSpriteContents.set(originalAbsoluteUrl, content);
+      }
       return publicPath;
     } catch {
       // File does not exist, proceed with download
@@ -131,13 +140,17 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
     }
 
     let content: Buffer | string;
-    if (assetType === 'styles' || assetType === 'scripts') {
+    if (assetType === 'styles' || assetType === 'scripts' || originalAbsoluteUrl.endsWith('.svg')) { // MODIFIED: Check for .svg explicitly
       content = await response.text();
+      if (originalAbsoluteUrl.endsWith('.svg')) {
+          svgSpriteContents.set(originalAbsoluteUrl, content); // Store SVG content
+      }
     } else {
       content = Buffer.from(await response.arrayBuffer());
     }
     
     await fs.writeFile(localFilePath, content);
+    console.log(`Downloaded asset: ${originalAbsoluteUrl} to ${publicPath}`); // ADDED LOG
     return publicPath;
   } catch (downloadError) {
     console.warn(`Error downloading asset from ${originalAbsoluteUrl}:`, downloadError);
@@ -210,20 +223,47 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
     }
   });
 
-  // Handle <svg><use href="..."> tags and download SVG sprites
+  // Handle <svg><use href="..."> tags and inline SVG symbols
   $('svg use').each((_i, use) => {
     const href = $(use).attr('href');
     if (href) {
       const parts = href.split('#');
-      const baseUrl = parts[0]; // e.g., http://localhost:8080/o/classic-theme/images/clay/icons.svg
-      const fragment = parts[1] ? `#${parts[1]}` : ''; // e.g., #user
+      const baseUrl = parts[0]; 
+      const fragmentId = parts[1]; // Get the ID without '#'
 
       // Only process internal SVG sprites that have a base URL
-      if (baseUrl && baseUrl.startsWith(LIFERAY_HOST!)) {
+      if (baseUrl && baseUrl.startsWith(LIFERAY_HOST!) && fragmentId) {
         const originalAbsoluteUrl = baseUrl;
         assetPromises.push(
-          downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(newLocalPath => {
-            $(use).attr('href', `${newLocalPath}${fragment}`);
+          downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(() => {
+            // Now, get the content of the downloaded SVG sprite
+            const svgContent = svgSpriteContents.get(originalAbsoluteUrl);
+            if (svgContent) {
+              const $svgSprite = cheerio.load(svgContent);
+              const symbolElement = $svgSprite(`#${fragmentId}`);
+              if (symbolElement.length) {
+                const innerSvgContent = symbolElement.html();
+                const parentSvg = $(use).closest('svg');
+                if (parentSvg.length) {
+                  // Preserve original SVG attributes
+                  const originalClass = parentSvg.attr('class') || '';
+                  const originalRole = parentSvg.attr('role') || '';
+                  const viewBox = symbolElement.attr('viewBox') || ''; // Extract viewBox
+
+                  let newSvgElement = `<svg class="${originalClass}" role="${originalRole}"`;
+                  if (viewBox) {
+                    newSvgElement += ` viewBox="${viewBox}"`;
+                  }
+                  newSvgElement += `>${innerSvgContent}</svg>`;
+                  parentSvg.replaceWith(newSvgElement);
+                  console.log(`Inlined SVG symbol: ${fragmentId} from ${originalAbsoluteUrl}`);
+                }
+              } else {
+                console.warn(`SVG symbol with ID ${fragmentId} not found in ${originalAbsoluteUrl}`);
+              }
+            } else {
+              console.warn(`SVG content not found for ${originalAbsoluteUrl}`);
+            }
           })
         );
       }
