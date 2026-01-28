@@ -313,56 +313,62 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
    });
    console.log('[rewriteAndDownloadAssets] Finished processing <source> tags.');
 
-   // Handle <svg><use href="..."> tags and inline SVG symbols
-   console.log('[rewriteAndDownloadAssets] Processing <svg><use> tags...');
-   $('svg use').each((_i, use) => {
-     const href = $(use).attr('href');
-     if (href) {
-       console.log(`[rewriteAndDownloadAssets] Found <svg><use> with href: ${href}`);
-       const parts = href.split('#');
-       const baseUrl = parts[0];
-       const fragmentId = parts[1]; // Get the ID without '#'
+  // Handle <svg><use href="..."> tags and inline SVG symbols
+  console.log('[rewriteAndDownloadAssets] Processing <svg><use> tags...');
+  $('svg use').each((_i, use) => {
+    const href = $(use).attr('href');
+    if (href) {
+      console.log(`[rewriteAndDownloadAssets] Found <svg><use> with href: ${href}`);
+      const parts = href.split('#');
+      const svgSpriteBaseUrl = parts[0]; // This is the URL of the SVG sprite file (e.g., icons.svg)
+      const fragmentId = parts[1]; // Get the ID without '#'
 
-       // Only process internal SVG sprites that have a base URL
-       if (baseUrl && baseUrl.startsWith(LIFERAY_HOST!)) {
-         console.log(`[rewriteAndDownloadAssets] Processing internal SVG: ${href}`);
-         const originalAbsoluteUrl = baseUrl;
-         assetPromises.push(
-           downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(() => {
-             // Now, get the content of the downloaded SVG sprite
-             const svgContent = svgSpriteContents.get(originalAbsoluteUrl);
-             if (svgContent) {
-               const $svgSprite = cheerio.load(svgContent);
-               const symbolElement = $svgSprite(`#${fragmentId}`);
-               if (symbolElement.length) {
-                 const innerSvgContent = symbolElement.html() || ''; // Default to empty string if null
-                 const parentSvg = $(use).closest('svg');
-                 if (parentSvg.length) {
-                   // Preserve original SVG attributes
-                   const originalClass = parentSvg.attr('class') || '';
-                   const originalRole = parentSvg.attr('role') || '';
-                   const viewBox = symbolElement.attr('viewBox') || ''; // Extract viewBox
+      // Only process internal SVG sprites that have a base URL
+      if (svgSpriteBaseUrl && svgSpriteBaseUrl.startsWith(LIFERAY_HOST!)) {
+        console.log(`[rewriteAndDownloadAssets] Processing internal SVG sprite reference: ${href}`);
+        
+        assetPromises.push(
+          downloadAndRewriteAsset(svgSpriteBaseUrl, 'images').then(async localSvgSpritePath => { // Ensure download completes
+            if (fragmentId) { // Only attempt inlining if there's a fragment ID
+              try {
+                // Read the content of the downloaded SVG sprite from the local file system
+                // path.join(process.cwd(), 'public', localSvgSpritePath) creates the absolute path
+                const svgContent = await fs.readFile(path.join(process.cwd(), 'public', localSvgSpritePath), 'utf8');
+                const $svgSprite = cheerio.load(svgContent);
+                const symbolElement = $svgSprite(`#${fragmentId}`);
+                if (symbolElement.length) {
+                  const innerSvgContent = symbolElement.html() || ''; // Default to empty string if null
+                  const parentSvg = $(use).closest('svg');
+                  if (parentSvg.length) {
+                    const originalClass = parentSvg.attr('class') || '';
+                    const originalRole = parentSvg.attr('role') || '';
+                    const viewBox = symbolElement.attr('viewBox') || '';
 
-                   let newSvgElement = `<svg class="${originalClass}" role="${originalRole}"`;
-                   if (viewBox) {
-                     newSvgElement += ` viewBox="${viewBox}"`;
-                   }
-                   newSvgElement += `>${innerSvgContent}</svg>`;
-                   parentSvg.replaceWith(newSvgElement);
-                   console.log(`[rewriteAndDownloadAssets] Inlined SVG symbol: ${fragmentId} from ${originalAbsoluteUrl}`);
-                 }
-               } else {
-                 console.warn(`[rewriteAndDownloadAssets] SVG symbol with ID ${fragmentId} not found in ${originalAbsoluteUrl}`);
-               }
-             } else {
-               console.warn(`[rewriteAndDownloadAssets] SVG content not found for ${originalAbsoluteUrl}`);
-             }
-           })
-         );
-       }
-     }
-   });
-   console.log('[rewriteAndDownloadAssets] Finished processing <svg><use> tags.');
+                    let newSvgElement = `<svg class="${originalClass}" role="${originalRole}"`;
+                    if (viewBox) {
+                      newSvgElement += ` viewBox="${viewBox}"`;
+                    }
+                    newSvgElement += `>${innerSvgContent}</svg>`;
+                    parentSvg.replaceWith(newSvgElement);
+                    console.log(`[rewriteAndDownloadAssets] Inlined SVG symbol: ${fragmentId} from ${svgSpriteBaseUrl}`);
+                  }
+                } else {
+                  console.warn(`[rewriteAndDownloadAssets] SVG symbol with ID ${fragmentId} not found in ${svgSpriteBaseUrl} (local path: ${localSvgSpritePath})`);
+                }
+              } catch (readError) {
+                console.error(`[rewriteAndDownloadAssets] Error reading local SVG sprite file ${localSvgSpritePath}:`, readError);
+              }
+            } else {
+                console.warn(`[rewriteAndDownloadAssets] SVG <use> tag has no fragment ID: ${href}`);
+            }
+          })
+        );
+      } else if (svgSpriteBaseUrl && !svgSpriteBaseUrl.startsWith(LIFERAY_HOST!)) {
+        console.warn(`[rewriteAndDownloadAssets] External SVG sprite reference, leaving as is: ${href}`);
+      }
+    }
+  });
+  console.log('[rewriteAndDownloadAssets] Finished processing <svg><use> tags.');
 
    // Handle <a href="...">
    console.log('[rewriteAndDownloadAssets] Processing <a> tags...');
