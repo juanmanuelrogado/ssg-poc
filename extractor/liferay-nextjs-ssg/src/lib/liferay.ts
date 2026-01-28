@@ -12,6 +12,7 @@ const LIFERAY_API_ENDPOINT = process.env.LIFERAY_API_ENDPOINT;
 const LIFERAY_HOST = process.env.LIFERAY_HOST;
 const LIFERAY_API_EMAIL = process.env.LIFERAY_API_EMAIL;
 const LIFERAY_API_PASSWORD = process.env.LIFERAY_API_PASSWORD;
+const LIFERAY_PATH_PREFIX = process.env.LIFERAY_PATH_PREFIX || ''; // Default to empty string
 
 if (!LIFERAY_API_ENDPOINT) {
   throw new Error('LIFERAY_API_ENDPOINT is not defined in .env.local');
@@ -28,8 +29,12 @@ if (LIFERAY_API_EMAIL && LIFERAY_API_PASSWORD) {
   console.warn('LIFERAY_API_EMAIL or LIFERAY_API_PASSWORD not defined. Proceeding without Basic Auth.');
 }
 
-export async function getLiferayApiContent(apiPath: string = ''): Promise<any> {
-  const url = `${LIFERAY_API_ENDPOINT}${apiPath}`;
+export async function getLiferayApiContent(apiPath: string = '', pageSize?: number): Promise<any> {
+  const urlObj = new URL(`${LIFERAY_API_ENDPOINT}${apiPath}`);
+  if (pageSize !== undefined && apiPath.includes('/site-pages')) {
+    urlObj.searchParams.set('pageSize', pageSize.toString());
+  }
+  const url = urlObj.toString();
   try {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -48,7 +53,9 @@ export async function getLiferayApiContent(apiPath: string = ''): Promise<any> {
       throw new Error(`Failed to fetch Liferay JSON content from ${url}: ${response.status} - ${response.statusText}`);
     }
 
-    return await response.json();
+    const jsonResponse = await response.json();
+    console.log(`[getLiferayApiContent] Successfully fetched from ${url}. Response (first 500 chars):`, JSON.stringify(jsonResponse).substring(0, 500));
+    return jsonResponse;
   } catch (error) {
     console.error(`Error fetching Liferay JSON content from ${url}:`, error);
     throw error;
@@ -102,7 +109,9 @@ async function getLiferayFullPageHtml(pageUrl: string): Promise<{ html: string; 
 }
 
 export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, assetType: string): Promise<string> {
+  console.log(`[downloadAndRewriteAsset] Starting for URL: ${originalAbsoluteUrl}, Type: ${assetType}`);
   if (!originalAbsoluteUrl) {
+    console.warn(`[downloadAndRewriteAsset] originalAbsoluteUrl is empty, returning empty string.`);
     return '';
   }
 
@@ -117,25 +126,19 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
   await fs.mkdir(localDir, { recursive: true });
 
   try {
-    try {
-      await fs.access(localFilePath);
-      console.log(`Asset already exists: ${publicPath}`); // ADDED LOG
-      // If the asset is an SVG, retrieve its content and store it in the map if not already there
-      if (originalAbsoluteUrl.endsWith('.svg') && !svgSpriteContents.has(originalAbsoluteUrl)) {
-        const content = await fs.readFile(localFilePath, 'utf8');
-        svgSpriteContents.set(originalAbsoluteUrl, content);
-      }
-      return publicPath;
-    } catch {
-      // File does not exist, proceed with download
-    }
-
+        try {
+          await fs.access(localFilePath);
+          return publicPath;
+        } catch {
+          // File does not exist, proceed with download
+        }
     const response = await fetch(originalAbsoluteUrl, {
       headers: authHeader ? { 'Authorization': authHeader } : {},
     });
 
     if (!response.ok) {
       console.warn(`Failed to download asset from ${originalAbsoluteUrl}: ${response.status} - ${response.statusText}`);
+      console.log(`[downloadAndRewriteAsset] Failed to download, returning originalAbsoluteUrl: ${originalAbsoluteUrl}`);
       return originalAbsoluteUrl;
     }
 
@@ -151,39 +154,111 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
     
     await fs.writeFile(localFilePath, content);
     console.log(`Downloaded asset: ${originalAbsoluteUrl} to ${publicPath}`); // ADDED LOG
+    console.log(`[downloadAndRewriteAsset] Successfully processed URL: ${originalAbsoluteUrl}, returning publicPath: ${publicPath}`);
     return publicPath;
   } catch (downloadError) {
-    console.warn(`Error downloading asset from ${originalAbsoluteUrl}:`, downloadError);
+    console.error(`[downloadAndRewriteAsset] Error during processing for URL: ${originalAbsoluteUrl}, Type: ${assetType}`, downloadError);
     return originalAbsoluteUrl;
   }
 }
 
 async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Promise<string> {
-  const urlRegex = /url\(['"]?(.*?)['"]?\)/g;
-  let processedCss = cssContent;
-  const cssAssetPromises: Promise<void>[] = [];
+  console.log(`[processAndRewriteCssUrls] Starting for CSS content length: ${cssContent.length}, Base URL: ${baseUrl}`);
 
-  let match: RegExpExecArray | null;
-  const currentCssContent = cssContent; 
-  while ((match = urlRegex.exec(currentCssContent)) !== null) {
-    const originalUrl = match[1];
-    if (originalUrl && originalUrl.startsWith('/')) {
-      const absoluteUrl = new URL(originalUrl, baseUrl).toString();
-      const assetType = (originalUrl.match(/\.(png|jpg|jpeg|gif|svg|webp|eot|ttf|woff|woff2)$/i)) ? 'images' : 'fonts';
+  // Handle @import rules by recursively inlining
+  const importRegex = /@import\s+(?:url\((['"]?)(.*?)\1\)|(['"])(.*?)\3);?/g;
+  let inlinedCss = cssContent;
+  const importMatches = Array.from(inlinedCss.matchAll(importRegex));
 
-      cssAssetPromises.push(
-        downloadAndRewriteAsset(absoluteUrl, assetType).then(newLocalUrl => {
-          processedCss = processedCss.replace(match![0], `url('${newLocalUrl}')`);
-        })
-      );
+  if (importMatches.length > 0) {
+    const importReplacements = await Promise.all(
+      importMatches.map(async (match) => {
+        const importUrl = match[2] || match[4];
+        if (importUrl) {
+          try {
+            const absoluteUrl = new URL(importUrl, baseUrl).toString();
+            
+            if (!absoluteUrl.startsWith(LIFERAY_HOST!)) {
+                // External import, leave it as is.
+                return { from: match[0], to: match[0] };
+            }
+
+            console.log(`[processAndRewriteCssUrls] Processing @import: ${importUrl} -> ${absoluteUrl}`);
+            // Basic circular dependency check
+            if (absoluteUrl === baseUrl) {
+                return { from: match[0], to: '' };
+            }
+            const response = await fetch(absoluteUrl, { headers: authHeader ? { 'Authorization': authHeader } : {} });
+            if (response.ok) {
+              const importedText = await response.text();
+              const processedImport = await processAndRewriteCssUrls(importedText, absoluteUrl);
+              return { from: match[0], to: processedImport };
+            }
+            console.warn(`[processAndRewriteCssUrls] FAILED to fetch imported CSS from ${absoluteUrl}: ${response.status}`);
+          } catch (e) {
+            console.error(`[processAndRewriteCssUrls] FAILED to process @import for ${importUrl}:`, e);
+          }
+        }
+        return { from: match[0], to: '' }; // Remove if fails or invalid
+      })
+    );
+
+    for (const { from, to } of importReplacements) {
+      inlinedCss = inlinedCss.replace(from, to);
     }
   }
-  await Promise.all(cssAssetPromises);
+
+
+  const urlRegex = /url\((?!['"]?data:)(['"]?)(.*?)\1\)/g;
+  let processedCss = inlinedCss; // Use the version with inlined imports
+  const cssAssetPromises: Promise<{ from: string, to: string }>[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(inlinedCss)) !== null) {
+    try {
+      const originalUrl = match[2];
+      const matchFrom = match[0];
+      if (originalUrl) {
+        let absoluteUrl: string;
+        try {
+          absoluteUrl = new URL(originalUrl, baseUrl).toString();
+        } catch (urlError) {
+          continue; // Skip this URL if it's malformed
+        }
+
+        if (absoluteUrl.startsWith(LIFERAY_HOST!)) {
+            const assetType = (originalUrl.match(/\.(png|jpg|jpeg|gif|svg|webp|eot|ttf|woff|woff2)$/i)) ? 'images' : 'fonts';
+            cssAssetPromises.push(
+              downloadAndRewriteAsset(absoluteUrl, assetType).then(newLocalUrl => {
+                return { from: matchFrom, to: `url('${newLocalUrl}')` };
+              })
+            );
+        }
+      }
+    } catch (e) {
+      console.error(`[processAndRewriteCssUrls] Error processing match: ${match[0]}`, e);
+      console.error(`[processAndRewriteCssUrls] Problematic CSS content: ${inlinedCss}`);
+    }
+  }
+  const replacements = await Promise.all(cssAssetPromises);
+
+  for(const replacement of replacements) {
+    processedCss = processedCss.replaceAll(replacement.from, replacement.to);
+  }
+
+  console.log(`[processAndRewriteCssUrls] Finished, processed CSS length: ${processedCss.length}`);
   return processedCss;
 }
 
 export async function rewriteAndDownloadAssets(html: string, baseUrl: string, discoveredCssUrls: string[], discoveredJsUrls: string[], allFriendlyUrlPaths: Set<string>): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
-  const $ = cheerio.load(html);
+  let $;
+  try {
+    $ = cheerio.load(html);
+    console.log('[rewriteAndDownloadAssets] Cheerio successfully loaded HTML.');
+  } catch (cheerioError) {
+    console.error(`[rewriteAndDownloadAssets] Error loading HTML into Cheerio. Problematic HTML (first 5000 chars): ${html.substring(0, 5000)}`, cheerioError);
+    throw cheerioError; // Re-throw to propagate the error
+  }
 
   const assetPromises: Promise<void>[] = [];
   const extractedStyleContents: string[] = [];
@@ -191,28 +266,36 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
   const extractedScriptPaths: string[] = [];
 
   // Rewrite img src and download
+  console.log('[rewriteAndDownloadAssets] Processing <img> tags...');
   $('img').each((_i, img) => {
     const src = $(img).attr('src');
     if (src && src.startsWith('/')) {
+      console.log(`[rewriteAndDownloadAssets] Found <img> with src: ${src}`);
       const originalAbsoluteUrl = new URL(src, baseUrl).toString();
       assetPromises.push(
         downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(newSrc => {
           $(img).attr('src', newSrc);
+          console.log(`[rewriteAndDownloadAssets] Rewrote <img> src from ${originalAbsoluteUrl} to ${newSrc}`);
         })
       );
     }
   });
+  console.log('[rewriteAndDownloadAssets] Finished processing <img> tags.');
 
   // Rewrite source srcset and download
+  console.log('[rewriteAndDownloadAssets] Processing <source> tags...');
   $('source').each((_i, source) => {
     const srcset = $(source).attr('srcset');
     if (srcset) {
+      console.log(`[rewriteAndDownloadAssets] Found <source> with srcset: ${srcset}`);
       const rewrittenSrcsetPromises = srcset.split(',').map(async s => {
         const parts = s.trim().split(' ');
         const url = parts[0];
         if (url && url.startsWith('/')) {
+          console.log(`[rewriteAndDownloadAssets] Found <source> url in srcset: ${url}`);
           const originalAbsoluteUrl = new URL(url, baseUrl).toString();
           const newUrl = await downloadAndRewriteAsset(originalAbsoluteUrl, 'images');
+          console.log(`[rewriteAndDownloadAssets] Rewrote <source> srcset url from ${originalAbsoluteUrl} to ${newUrl}`);
           return newUrl + (parts[1] ? ` ${parts[1]}` : '');
         }
         return s;
@@ -222,17 +305,21 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
       }));
     }
   });
+  console.log('[rewriteAndDownloadAssets] Finished processing <source> tags.');
 
   // Handle <svg><use href="..."> tags and inline SVG symbols
+  console.log('[rewriteAndDownloadAssets] Processing <svg><use> tags...');
   $('svg use').each((_i, use) => {
     const href = $(use).attr('href');
     if (href) {
+      console.log(`[rewriteAndDownloadAssets] Found <svg><use> with href: ${href}`);
       const parts = href.split('#');
-      const baseUrl = parts[0]; 
+      const baseUrl = parts[0];
       const fragmentId = parts[1]; // Get the ID without '#'
 
       // Only process internal SVG sprites that have a base URL
       if (baseUrl && baseUrl.startsWith(LIFERAY_HOST!) && fragmentId) {
+        console.log(`[rewriteAndDownloadAssets] Processing internal SVG: ${href}`);
         const originalAbsoluteUrl = baseUrl;
         assetPromises.push(
           downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(() => {
@@ -242,7 +329,7 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
               const $svgSprite = cheerio.load(svgContent);
               const symbolElement = $svgSprite(`#${fragmentId}`);
               if (symbolElement.length) {
-                const innerSvgContent = symbolElement.html();
+                const innerSvgContent = symbolElement.html() || ''; // Default to empty string if null
                 const parentSvg = $(use).closest('svg');
                 if (parentSvg.length) {
                   // Preserve original SVG attributes
@@ -256,24 +343,27 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
                   }
                   newSvgElement += `>${innerSvgContent}</svg>`;
                   parentSvg.replaceWith(newSvgElement);
-                  console.log(`Inlined SVG symbol: ${fragmentId} from ${originalAbsoluteUrl}`);
+                  console.log(`[rewriteAndDownloadAssets] Inlined SVG symbol: ${fragmentId} from ${originalAbsoluteUrl}`);
                 }
               } else {
-                console.warn(`SVG symbol with ID ${fragmentId} not found in ${originalAbsoluteUrl}`);
+                console.warn(`[rewriteAndDownloadAssets] SVG symbol with ID ${fragmentId} not found in ${originalAbsoluteUrl}`);
               }
             } else {
-              console.warn(`SVG content not found for ${originalAbsoluteUrl}`);
+              console.warn(`[rewriteAndDownloadAssets] SVG content not found for ${originalAbsoluteUrl}`);
             }
           })
         );
       }
     }
   });
+  console.log('[rewriteAndDownloadAssets] Finished processing <svg><use> tags.');
 
   // Handle <a href="...">
+  console.log('[rewriteAndDownloadAssets] Processing <a> tags...');
   $('a').each((_i, a) => {
     const href = $(a).attr('href');
     if (href) {
+      console.log(`[rewriteAndDownloadAssets] Found <a> with href: ${href}`);
       let finalHref = href;
       let isInternalLink = false;
       let potentialPath: string | undefined;
@@ -292,16 +382,15 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
       }
       
       if (potentialPath) {
-        // Case 1: Liferay's /web/guest/ path
-        const liferayGuestPathMatch = potentialPath.match(/^\/web\/guest(\/.*)/);
-        if (liferayGuestPathMatch) {
-            const friendlyUrlPath = liferayGuestPathMatch[1];
+        // Case 1: Liferay's configured path prefix
+        if (LIFERAY_PATH_PREFIX && potentialPath.startsWith(LIFERAY_PATH_PREFIX)) {
+            const friendlyUrlPath = potentialPath.substring(LIFERAY_PATH_PREFIX.length);
             if (allFriendlyUrlPaths.has(friendlyUrlPath)) {
                 finalHref = `/pages${friendlyUrlPath}`;
                 isInternalLink = true;
             }
         } 
-        // Case 2: Direct relative path that matches a friendlyUrlPath
+        // Case 2: Direct relative path that matches a friendlyUrlPath (if no prefix or if prefix not matched)
         else if (allFriendlyUrlPaths.has(potentialPath)) {
             finalHref = `/pages${potentialPath}`;
             isInternalLink = true;
@@ -314,13 +403,17 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
       }
       
       $(a).attr('href', finalHref);
+      console.log(`[rewriteAndDownloadAssets] Rewrote <a> href from ${href} to ${finalHref}`);
     }
   });
+  console.log('[rewriteAndDownloadAssets] Finished processing <a> tags.');
 
   // Handle <style> tags (inline CSS) - process content for internal url() references and extract
+  console.log('[rewriteAndDownloadAssets] Processing <style> tags...');
   $('style').each((_i, styleTag) => {
     const cssContent = $(styleTag).html();
     if (cssContent) {
+      console.log(`[rewriteAndDownloadAssets] Found <style> tag with content length: ${cssContent.length}`);
       assetPromises.push(
         processAndRewriteCssUrls(cssContent, baseUrl).then(newCssContent => {
           extractedStyleContents.push(newCssContent);
@@ -329,52 +422,61 @@ export async function rewriteAndDownloadAssets(html: string, baseUrl: string, di
       );
     }
   });
+  console.log('[rewriteAndDownloadAssets] Finished processing <style> tags.');
 
   // --- Use discoveredCssUrls for external stylesheets ---
   // Remove existing <link rel="stylesheet"> tags from the HTML as they will be linked via props
   $('link[rel="stylesheet"]').remove(); 
   
   // Download and process DISCOVERED CSS URLs
-  const cssDownloadPromises = discoveredCssUrls.map(url =>
-    downloadAndRewriteAsset(url, 'styles').then(async localPath => {
+  console.log('[rewriteAndDownloadAssets] Processing discovered CSS URLs...');
+  const cssDownloadPromises = discoveredCssUrls.map(url => {
+    console.log(`[rewriteAndDownloadAssets] Discovered CSS URL: ${url}`);
+    return downloadAndRewriteAsset(url, 'styles').then(async localPath => {
       extractedLinkStylePaths.push(localPath);
+      console.log(`[rewriteAndDownloadAssets] Downloaded CSS to: ${localPath}`);
       // Process content of this downloaded CSS file for internal URLs
       const rawCssContent = await fs.readFile(path.join(process.cwd(), 'public', localPath), 'utf8');
-      const processedCssContent = await processAndRewriteCssUrls(rawCssContent, baseUrl);
+      const processedCssContent = await processAndRewriteCssUrls(rawCssContent, url);
       await fs.writeFile(path.join(process.cwd(), 'public', localPath), processedCssContent);
-    })
-  );
+    });
+  });
   assetPromises.push(...cssDownloadPromises);
+  console.log('[rewriteAndDownloadAssets] Finished processing discovered CSS URLs.');
 
   // --- Use discoveredJsUrls for external scripts ---
   // Remove existing <script src> tags from the HTML as they will be re-rendered via props
   $('script[src]').remove();
 
   // Download DISCOVERED JS URLs
-  const jsDownloadPromises = discoveredJsUrls.map(url =>
-    downloadAndRewriteAsset(url, 'scripts').then(localPath => {
+  console.log('[rewriteAndDownloadAssets] Processing discovered JS URLs...');
+  const jsDownloadPromises = discoveredJsUrls.map(url => {
+    console.log(`[rewriteAndDownloadAssets] Discovered JS URL: ${url}`);
+    return downloadAndRewriteAsset(url, 'scripts').then(localPath => {
       extractedScriptPaths.push(localPath);
-    })
-  );
+      console.log(`[rewriteAndDownloadAssets] Downloaded JS to: ${localPath}`);
+    });
+  });
   assetPromises.push(...jsDownloadPromises);
+  console.log('[rewriteAndDownloadAssets] Finished processing discovered JS URLs.');
 
-  await Promise.all(assetPromises);
+  await Promise.all(assetPromises)
+    .then(() => console.log('[rewriteAndDownloadAssets] All asset promises resolved.'))
+    .catch(error => {
+      console.error('[rewriteAndDownloadAssets] Error resolving asset promises:', error);
+      throw error; // Re-throw the error to propagate it
+    });
 
   return { html: $.html(), extractedStyles: extractedStyleContents, extractedLinkStyles: extractedLinkStylePaths, extractedScriptPaths };
 }
 
 export async function getLiferayScrapedContent(publicPageUrl: string, allFriendlyUrlPaths: Set<string>): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
   try {
+    console.log(`[getLiferayScrapedContent] Scraping URL: ${publicPageUrl}`);
     const { html: fullHtml, discoveredCssUrls, discoveredJsUrls } = await getLiferayFullPageHtml(publicPageUrl);
-    console.log('--- Full HTML from Puppeteer (snippet) for', publicPageUrl, '---');
-    console.log(fullHtml.substring(0, 2000) + '...');
-    console.log('--- End Full HTML from Puppeteer ---');
-    console.log('--- Discovered CSS URLs (via Network) ---');
-    discoveredCssUrls.forEach(url => console.log(url));
-    console.log('--- End Discovered CSS URLs ---');
-    console.log('--- Discovered JS URLs (via Network) ---');
-    discoveredJsUrls.forEach(url => console.log(url));
-    console.log('--- End Discovered JS URLs ---');
+    console.log(`[getLiferayScrapedContent] fullHtml length: ${fullHtml.length}. Snippet: ${fullHtml.substring(0, 500)}`);
+    console.log(`[getLiferayScrapedContent] discoveredCssUrls:`, discoveredCssUrls);
+    console.log(`[getLiferayScrapedContent] discoveredJsUrls:`, discoveredJsUrls);
 
 
     const { html: processedHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await rewriteAndDownloadAssets(fullHtml, LIFERAY_HOST!, discoveredCssUrls, discoveredJsUrls, allFriendlyUrlPaths); 
