@@ -31,8 +31,18 @@ interface PageProps {
 
 
 export const getStaticPaths: GetStaticPaths = async () => {
+  const siteId = process.env.LIFERAY_SITE_ID;
+  if (!siteId) {
+    throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+  }
+
+  const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
+  const paths = allSitePagesResponse.items.map((page: any) => ({
+    params: { slug: page.friendlyUrlPath.substring(1) }, // Remove leading slash
+  }));
+
   return {
-    paths: [{ params: { slug: 'home' } }],
+    paths,
     fallback: false,
   };
 };

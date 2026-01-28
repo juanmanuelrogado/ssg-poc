@@ -59,7 +59,7 @@ export async function getLiferayApiContent(apiPath: string = '', pageSize?: numb
     }
 
     const jsonResponse = await response.json();
-    console.log(`[getLiferayApiContent] Successfully fetched from ${url}. Response (first 500 chars):`, JSON.stringify(jsonResponse).substring(0, 500));
+
     return jsonResponse;
   } catch (error) {
     console.error(`Error fetching Liferay JSON content from ${url}:`, error);
@@ -114,15 +114,16 @@ async function getLiferayFullPageHtml(pageUrl: string): Promise<{ html: string; 
 }
 
 export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, assetType: string): Promise<string> {
-  console.log(`[downloadAndRewriteAsset] Starting for URL: ${originalAbsoluteUrl}, Type: ${assetType}`);
+
   if (!originalAbsoluteUrl) {
     console.warn(`[downloadAndRewriteAsset] originalAbsoluteUrl is empty, returning a placeholder ('#').`);
     return '#';
   }
 
-  const hash = createHash('sha256').update(originalAbsoluteUrl).digest('hex'); // Use SHA256 hash
+  const hash = createHash('sha256').update(originalAbsoluteUrl).digest('hex');
+  const originalName = path.basename(new URL(originalAbsoluteUrl).pathname, path.extname(new URL(originalAbsoluteUrl).pathname));
   const extension = assetType === 'styles' ? '.css' : assetType === 'scripts' ? '.js' : path.extname(new URL(originalAbsoluteUrl).pathname);
-  const localFilename = `${hash}${extension}`; // Use the full hash
+  const localFilename = `${originalName}-${hash}${extension}`;
 
   const localDir = path.join(process.cwd(), 'public', 'assets', assetType);
   const localFilePath = path.join(localDir, localFilename);
@@ -131,19 +132,23 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
   await fs.mkdir(localDir, { recursive: true });
 
   try {
-        try {
-          await fs.access(localFilePath);
-          return publicPath;
-        } catch {
-          // File does not exist, proceed with download
-        }
+    await fs.access(localFilePath);
+    console.warn(`[downloadAndRewriteAsset] Asset already exists: ${publicPath}`);
+    return publicPath;
+  } catch {
+    // File does not exist, proceed with download
+  }
+
+  try {
     const response = await fetch(originalAbsoluteUrl, {
       headers: authHeader ? { 'Authorization': authHeader } : {},
     });
 
     if (!response.ok) {
       console.warn(`Failed to download asset from ${originalAbsoluteUrl}: ${response.status} - ${response.statusText}`);
-      console.log(`[downloadAndRewriteAsset] Failed to download, returning originalAbsoluteUrl: ${originalAbsoluteUrl}`);
+      const responseBody = await response.text();
+      console.warn(`[downloadAndRewriteAsset] Failed response body: ${responseBody}`);
+      console.warn(`[downloadAndRewriteAsset] Failed to download, returning originalAbsoluteUrl: ${originalAbsoluteUrl}`);
       return originalAbsoluteUrl;
     }
 
@@ -158,8 +163,6 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
     }
     
     await fs.writeFile(localFilePath, content);
-    console.log(`Downloaded asset: ${originalAbsoluteUrl} to ${publicPath}`); // ADDED LOG
-    console.log(`[downloadAndRewriteAsset] Successfully processed URL: ${originalAbsoluteUrl}, returning publicPath: ${publicPath}`);
     return publicPath;
   } catch (downloadError) {
     console.error(`[downloadAndRewriteAsset] Error during processing for URL: ${originalAbsoluteUrl}, Type: ${assetType}`, downloadError);
@@ -168,7 +171,6 @@ export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, asset
 }
 
 async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Promise<string> {
-  console.log(`[processAndRewriteCssUrls] Starting for CSS content length: ${cssContent.length}, Base URL: ${baseUrl}`);
 
   // Handle @import rules by recursively inlining
   const importRegex = /@import\s+(?:url\((['"]?)(.*?)\1\)|(['"])(.*?)\3);?/g;
@@ -188,7 +190,7 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
                 return { from: match[0], to: match[0] };
             }
 
-            console.log(`[processAndRewriteCssUrls] Processing @import: ${importUrl} -> ${absoluteUrl}`);
+            console.warn(`[processAndRewriteCssUrls] Processing @import: ${importUrl} -> ${absoluteUrl}`);
             // Basic circular dependency check
             if (absoluteUrl === baseUrl) {
                 return { from: match[0], to: '' };
@@ -251,7 +253,6 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
     processedCss = processedCss.replaceAll(replacement.from, replacement.to);
   }
 
-  console.log(`[processAndRewriteCssUrls] Finished, processed CSS length: ${processedCss.length}`);
   return processedCss;
 }
 
@@ -260,7 +261,6 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
    let $;
    try {
      $ = cheerio.load(html);
-     console.log('[rewriteAndDownloadAssets] Cheerio successfully loaded HTML.');
    } catch (cheerioError) {
      console.error(`[rewriteAndDownloadAssets] Error loading HTML into Cheerio. Problematic HTML (first 5000 chars): ${html.substring(0, 5000)}`, cheerioError);
      throw cheerioError; // Re-throw to propagate the error
@@ -272,36 +272,28 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
    const extractedScriptPaths: string[] = [];
 
    // Rewrite img src and download
-   console.log('[rewriteAndDownloadAssets] Processing <img> tags...');
    $('img').each((_i, img) => {
      const src = $(img).attr('src');
      if (src && src.startsWith('/')) {
-       console.log(`[rewriteAndDownloadAssets] Found <img> with src: ${src}`);
-       const originalAbsoluteUrl = new URL(src, baseUrl).toString();
+       const originalAbsoluteUrl = new URL(src, LIFERAY_HOST!).toString();
        assetPromises.push(
          downloadAndRewriteAsset(originalAbsoluteUrl, 'images').then(newSrc => {
            $(img).attr('src', newSrc);
-           console.log(`[rewriteAndDownloadAssets] Rewrote <img> src from ${originalAbsoluteUrl} to ${newSrc}`);
          })
        );
      }
    });
-   console.log('[rewriteAndDownloadAssets] Finished processing <img> tags.');
 
    // Rewrite source srcset and download
-   console.log('[rewriteAndDownloadAssets] Processing <source> tags...');
    $('source').each((_i, source) => {
      const srcset = $(source).attr('srcset');
      if (srcset) {
-       console.log(`[rewriteAndDownloadAssets] Found <source> with srcset: ${srcset}`);
        const rewrittenSrcsetPromises = srcset.split(',').map(async s => {
          const parts = s.trim().split(' ');
          const url = parts[0];
          if (url && url.startsWith('/')) {
-           console.log(`[rewriteAndDownloadAssets] Found <source> url in srcset: ${url}`);
-           const originalAbsoluteUrl = new URL(url, baseUrl).toString();
+           const originalAbsoluteUrl = new URL(url, LIFERAY_HOST!).toString();
            const newUrl = await downloadAndRewriteAsset(originalAbsoluteUrl, 'images');
-           console.log(`[rewriteAndDownloadAssets] Rewrote <source> srcset url from ${originalAbsoluteUrl} to ${newUrl}`);
            return newUrl + (parts[1] ? ` ${parts[1]}` : '');
          }
          return s;
@@ -311,21 +303,17 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
        }));
      }
    });
-   console.log('[rewriteAndDownloadAssets] Finished processing <source> tags.');
 
   // Handle <svg><use href="..."> tags and inline SVG symbols
-  console.log('[rewriteAndDownloadAssets] Processing <svg><use> tags...');
   $('svg use').each((_i, use) => {
     const href = $(use).attr('href');
     if (href) {
-      console.log(`[rewriteAndDownloadAssets] Found <svg><use> with href: ${href}`);
       const parts = href.split('#');
       const svgSpriteBaseUrl = parts[0]; // This is the URL of the SVG sprite file (e.g., icons.svg)
       const fragmentId = parts[1]; // Get the ID without '#'
 
       // Only process internal SVG sprites that have a base URL
       if (svgSpriteBaseUrl && svgSpriteBaseUrl.startsWith(LIFERAY_HOST!)) {
-        console.log(`[rewriteAndDownloadAssets] Processing internal SVG sprite reference: ${href}`);
         
         assetPromises.push(
           downloadAndRewriteAsset(svgSpriteBaseUrl, 'images').then(async localSvgSpritePath => { // Ensure download completes
@@ -350,7 +338,6 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
                     }
                     newSvgElement += `>${innerSvgContent}</svg>`;
                     parentSvg.replaceWith(newSvgElement);
-                    console.log(`[rewriteAndDownloadAssets] Inlined SVG symbol: ${fragmentId} from ${svgSpriteBaseUrl}`);
                   }
                 } else {
                   console.warn(`[rewriteAndDownloadAssets] SVG symbol with ID ${fragmentId} not found in ${svgSpriteBaseUrl} (local path: ${localSvgSpritePath})`);
@@ -368,14 +355,11 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
       }
     }
   });
-  console.log('[rewriteAndDownloadAssets] Finished processing <svg><use> tags.');
 
    // Handle <a href="...">
-   console.log('[rewriteAndDownloadAssets] Processing <a> tags...');
    $('a').each((_i, a) => {
      const href = $(a).attr('href');
      if (href) {
-       console.log(`[rewriteAndDownloadAssets] Found <a> with href: ${href}`);
        let finalHref = href;
        let isInternalLink = false;
        let potentialPath: string | undefined;
@@ -415,17 +399,13 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
        }
 
        $(a).attr('href', finalHref);
-       console.log(`[rewriteAndDownloadAssets] Rewrote <a> href from ${href} to ${finalHref}`);
      }
    });
-   console.log('[rewriteAndDownloadAssets] Finished processing <a> tags.');
 
    // Handle <style> tags (inline CSS) - process content for internal url() references and extract
-   console.log('[rewriteAndDownloadAssets] Processing <style> tags...');
    $('style').each((_i, styleTag) => {
      const cssContent = $(styleTag).html();
      if (cssContent) {
-       console.log(`[rewriteAndDownloadAssets] Found <style> tag with content length: ${cssContent.length}`);
        assetPromises.push(
          processAndRewriteCssUrls(cssContent, baseUrl).then(newCssContent => {
            extractedStyleContents.push(newCssContent);
@@ -434,19 +414,15 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
        );
      }
    });
-   console.log('[rewriteAndDownloadAssets] Finished processing <style> tags.');
 
    // --- Use discoveredCssUrls for external stylesheets ---
    // Remove existing <link rel="stylesheet"> tags from the HTML as they will be linked via props
    $('link[rel="stylesheet"]').remove();
 
    // Download and process DISCOVERED CSS URLs
-   console.log('[rewriteAndDownloadAssets] Processing discovered CSS URLs...');
    const cssDownloadPromises = discoveredCssUrls.map(url => {
-     console.log(`[rewriteAndDownloadAssets] Discovered CSS URL: ${url}`);
      return downloadAndRewriteAsset(url, 'styles').then(async localPath => {
        extractedLinkStylePaths.push(localPath);
-       console.log(`[rewriteAndDownloadAssets] Downloaded CSS to: ${localPath}`);
        // Process content of this downloaded CSS file for internal URLs
        const rawCssContent = await fs.readFile(path.join(process.cwd(), 'public', localPath), 'utf8');
        const processedCssContent = await processAndRewriteCssUrls(rawCssContent, url);
@@ -454,26 +430,20 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
      });
    });
    assetPromises.push(...cssDownloadPromises);
-   console.log('[rewriteAndRewriteAssets] Finished processing discovered CSS URLs.');
 
    // --- Use discoveredJsUrls for external scripts ---
    // Remove existing <script src> tags from the HTML as they will be re-rendered via props
    $('script[src]').remove();
 
    // Download DISCOVERED JS URLs
-   console.log('[rewriteAndDownloadAssets] Processing discovered JS URLs...');
    const jsDownloadPromises = discoveredJsUrls.map(url => {
-     console.log(`[rewriteAndDownloadAssets] Discovered JS URL: ${url}`);
      return downloadAndRewriteAsset(url, 'scripts').then(localPath => {
        extractedScriptPaths.push(localPath);
-       console.log(`[rewriteAndDownloadAssets] Downloaded JS to: ${localPath}`);
      });
    });
    assetPromises.push(...jsDownloadPromises);
-   console.log('[rewriteAndDownloadAssets] Finished processing discovered JS URLs.');
 
    // Handle style attributes with url() - for background images etc.
-   console.log('[rewriteAndDownloadAssets] Processing elements with style attributes containing url()...');
    const styleAttrPromises: Promise<void>[] = [];
    $('[style*="url("]').each((_i, el) => {
      const styleAttr = $(el).attr('style');
@@ -490,7 +460,7 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
            if (originalUrlInAttr) {
              let absoluteUrl: string;
              try {
-               absoluteUrl = new URL(originalUrlInAttr, baseUrl).toString();
+               absoluteUrl = new URL(originalUrlInAttr, LIFERAY_HOST!).toString();
              } catch (urlError) {
                console.warn(`[rewriteAndDownloadAssets] Malformed URL in style attribute: ${originalUrlInAttr}`, urlError);
                continue; // Skip this URL if it's malformed
@@ -533,10 +503,7 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
    
       assetPromises.push(...styleAttrPromises); // Add all style attribute promises to the main assetPromises array
    
-      console.log('[rewriteAndDownloadAssets] Finished processing elements with style attributes containing url().');
-   
       await Promise.all(assetPromises)
-        .then(() => console.log('[rewriteAndDownloadAssets] All asset promises resolved.'))
         .catch(error => {
           console.error('[rewriteAndDownloadAssets] Error resolving asset promises:', error);
           throw error; // Re-throw the error to propagate it
@@ -548,14 +515,10 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
 
 export async function getLiferayScrapedContent(publicPageUrl: string, allFriendlyUrlPaths: Set<string>): Promise<{ html: string; extractedStyles: string[]; extractedLinkStyles: string[]; extractedScriptPaths: string[] }> {
   try {
-    console.log(`[getLiferayScrapedContent] Scraping URL: ${publicPageUrl}`);
     const { html: fullHtml, discoveredCssUrls, discoveredJsUrls } = await getLiferayFullPageHtml(publicPageUrl);
-    console.log(`[getLiferayScrapedContent] fullHtml length: ${fullHtml.length}. Snippet: ${fullHtml.substring(0, 500)}`);
-    console.log(`[getLiferayScrapedContent] discoveredCssUrls:`, discoveredCssUrls);
-    console.log(`[getLiferayScrapedContent] discoveredJsUrls:`, discoveredJsUrls);
 
 
-    const { html: processedHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await rewriteAndDownloadAssets(fullHtml, LIFERAY_HOST!, discoveredCssUrls, discoveredJsUrls, allFriendlyUrlPaths); 
+    const { html: processedHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await rewriteAndDownloadAssets(fullHtml, publicPageUrl, discoveredCssUrls, discoveredJsUrls, allFriendlyUrlPaths); 
     
     const $ = cheerio.load(processedHtml);
     const bodyContent = $('body').html() || '';
