@@ -33,26 +33,26 @@ La solución se compone de los siguientes elementos clave:
 ```mermaid
 graph TD;
     subgraph "Liferay DXP"
-        A[Contenidos, Layouts y Widgets]
+        A["Contenidos, Layouts y Widgets"]
     end
 
     subgraph "Fase de Build (Servidor CI/CD)"
-        B(Aplicación Next.js SSG)
+        B("Aplicación Next.js SSG")
         B --"1. Llama a getStaticPaths para obtener lista de URLs"--> A
-        B --"2. Para cada URL, inicia Puppeteer"--> C{Puppeteer (Navegador Headless)}
+        B --"2. Para cada URL, inicia Puppeteer"--> C{"Puppeteer<br>(Navegador Headless)"}
         C --"3. Carga la página de Liferay"--> A
         A --"4. Devuelve HTML renderizado y assets"--> C
         C --"5. Entrega HTML a Next.js"--> B
         B --"6. Cheerio analiza el HTML, descarga assets y reescribe rutas"--> B
-        B --"7. `next build` genera los archivos finales"--> D[Sitio Estático (HTML, CSS, JS...)]
+        B --"7. `next build` genera los archivos finales"--> D["Sitio Estático<br>(HTML, CSS, JS...)"]
     end
 
     subgraph "Hosting/CDN"
-        E[Servidor Web / CDN (ej. Vercel, AWS S3, Nginx)]
+        E["Servidor Web / CDN (ej. Vercel, AWS S3, Nginx)"]
     end
 
     subgraph "Usuario Final"
-        F[Navegador del Usuario]
+        F["Navegador del Usuario"]
     end
 
     D --> E
