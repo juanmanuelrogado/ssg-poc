@@ -1,103 +1,103 @@
-# Liferay SSG Extractor con Next.js
+# Liferay SSG Extractor with Next.js
 
-## 1. Objetivo
+## 1. Objective
 
-El objetivo principal de este proyecto es transformar un sitio web dinámico gestionado en Liferay DXP en un sitio web estático de alto rendimiento. Esto permite beneficiarse de las ventajas de un sitio estático (velocidad de carga, seguridad, escalabilidad, bajo coste de hosting) sin sacrificar la potente capacidad de gestión de contenidos y construcción de páginas de Liferay.
+The main objective of this project is to transform a dynamic website managed in Liferay DXP into a high-performance static website. This allows leveraging the benefits of a static site (loading speed, security, scalability, low hosting costs) without sacrificing Liferay's powerful content management and page-building capabilities.
 
-## 2. Aproximación Adoptada: "Scrape & Bake"
+## 2. Adopted Approach: "Scrape & Bake"
 
-Para lograr el objetivo, se ha adoptado un enfoque de **"Scrape & Bake" (Extraer y Hornear)**.
+To achieve the objective, a **"Scrape & Bake"** approach has been adopted.
 
-A diferencia de un SSG (Static Site Generation) tradicional que se basa en consumir APIs de datos (JSON) para luego reconstruir las vistas con componentes de React, esta solución opta por un método más fiel al original:
+Unlike a traditional SSG (Static Site Generation) which relies on consuming data APIs (JSON) to then rebuild views with React components, this solution opts for a method more faithful to the original:
 
-1.  **Scrape (Extraer)**: Se utiliza un navegador programable (Puppeteer) para visitar cada página del sitio de Liferay como si fuera un usuario. Se espera a que la página se renderice por completo en el navegador, incluyendo toda la lógica ejecutada por JavaScript en el lado del cliente.
-2.  **Bake (Hornear)**: Una vez que se tiene el HTML final, se "hornea" en una página estática. Este proceso implica analizar el HTML capturado, descargar todos sus assets (CSS, JS, imágenes, fuentes), reescribir las rutas para que sean locales y empaquetar todo en una estructura de archivos lista para producción.
+1.  **Scrape**: A programmable browser (Puppeteer) is used to visit each page of the Liferay site as if it were a user. It waits for the page to fully render in the browser, including all client-side JavaScript logic.
+2.  **Bake**: Once the final HTML is obtained, it is "baked" into a static page. This process involves parsing the captured HTML, downloading all its assets (CSS, JS, images, fonts), rewriting the paths to be local, and packaging everything into a production-ready file structure.
 
-Se eligió esta aproximación porque garantiza la **máxima fidelidad visual y funcional** con el sitio original de Liferay, capturando el resultado de complejos widgets y aplicaciones que serían difíciles o imposibles de replicar únicamente con APIs de datos.
+This approach was chosen because it ensures the **highest visual and functional fidelity** with the original Liferay site, capturing the output of complex widgets and applications that would be difficult or impossible to replicate using only data APIs.
 
-## 3. Descripción de la Arquitectura
+## 3. Architecture Description
 
-La solución se compone de los siguientes elementos clave:
+The solution is composed of the following key elements:
 
-*   **Liferay DXP**: Actúa como la fuente de la verdad y el entorno de gestión de contenidos. Las páginas, el contenido, los widgets y los layouts se gestionan y renderizan aquí.
-*   **Next.js Application (`/extractor/liferay-nextjs-ssg`)**: Es el motor de la extracción y generación.
-    *   **Puppeteer**: Navegador headless (sin interfaz gráfica) que carga cada página pública de Liferay.
-    *   **Cheerio**: Librería que analiza el HTML capturado por Puppeteer para extraer, descargar y reescribir todos los assets y enlaces.
-    *   **Mecanismo SSG de Next.js**:
-        *   `getStaticPaths`: Se ejecuta en tiempo de construcción para obtener la lista de todas las páginas que deben ser generadas.
-        *   `getStaticProps`: Orquesta todo el proceso de "Scrape & Bake" para cada página individual.
-*   **Sitio Estático (directorio `/out`)**: El resultado final del proceso `next build`. Contiene archivos HTML, CSS, y JS puros que pueden ser desplegados en cualquier servidor web estático o CDN.
+*   **Liferay DXP**: Acts as the source of truth and content management environment. Pages, content, widgets, and layouts are managed and rendered here.
+*   **Next.js Application (`/extractor/liferay-nextjs-ssg`)**: This is the extraction and generation engine.
+    *   **Puppeteer**: Headless browser (no GUI) that loads each public Liferay page.
+    *   **Cheerio**: A library that parses the HTML captured by Puppeteer to extract, download, and rewrite all assets and links.
+    *   **Next.js SSG Mechanism**:
+        *   `getStaticPaths`: Runs at build time to get the list of all pages that must be generated.
+        *   `getStaticProps`: Orchestrates the entire "Scrape & Bake" process for each individual page.
+*   **Static Site (`/out` directory)**: The final result of the `next build` process. It contains pure HTML, CSS, and JS files that can be deployed to any static web server or CDN.
 
-## 4. Diagrama de Arquitectura
+## 4. Architecture Diagram
 
 ```mermaid
 graph TD;
     subgraph "Liferay DXP"
-        A[Contenidos, Layouts y Widgets]
+        A[Content, Layouts & Widgets]
     end
 
-    subgraph "Fase de Build (Servidor CI/CD)"
-        B(Aplicación Next.js SSG)
-        B --"1. Llama a getStaticPaths para obtener lista de URLs"--> A
-        B --"2. Para cada URL, inicia Puppeteer"--> C{"Puppeteer\n(Navegador Headless)"}
-        C --"3. Carga la página de Liferay"--> A
-        A --"4. Devuelve HTML renderizado y assets"--> C
-        C --"5. Entrega HTML a Next.js"--> B
-        B --"6. Cheerio analiza el HTML, descarga assets y reescribe rutas"--> B
-        B --"7. `next build` genera los archivos finales"--> D["Sitio Estático\n(HTML, CSS, JS...)"]
+    subgraph "Build Phase (CI/CD Server)"
+        B(Next.js SSG Application)
+        B --"1. Call getStaticPaths to get URL list"--> A
+        B --"2. For each URL, start Puppeteer"--> C{Puppeteer (Headless Browser)}
+        C --"3. Load Liferay page"--> A
+        A --"4. Return rendered HTML & assets"--> C
+        C --"5. Deliver HTML to Next.js"--> B
+        B --"6. Cheerio parses HTML, downloads assets, & rewrites paths"--> B
+        B --"7. `next build` generates final files"--> D[Static Site (HTML, CSS, JS...)]
     end
 
     subgraph "Hosting/CDN"
-        E["Servidor Web / CDN\n(ej. Vercel, AWS S3, Nginx)"]
+        E[Web Server / CDN (e.g., Vercel, AWS S3, Nginx)]
     end
 
-    subgraph "Usuario Final"
-        F[Navegador del Usuario]
+    subgraph "End User"
+        F[User's Browser]
     end
 
     D --> E
     E --> F
 ```
 
-## 5. Flujo de Trabajo Completo
+## 5. Complete Workflow
 
-El proceso para generar y desplegar el sitio estático es el siguiente:
+The process to generate and deploy the static site is as follows:
 
-1.  **Configuración**: Crea un archivo `.env.local` en el directorio `extractor/liferay-nextjs-ssg/` con las siguientes variables de entorno:
+1.  **Configuration**: Create a `.env.local` file in the `extractor/liferay-nextjs-ssg/` directory with the following environment variables:
     ```
-    # Endpoint de la API de Liferay para obtener la lista de páginas
+    # Liferay API endpoint to get the list of pages
     LIFERAY_API_ENDPOINT="http://localhost:8080/o/c"
 
-    # Host de la instancia de Liferay (para que Puppeteer la visite)
+    # Host of the Liferay instance (for Puppeteer to visit)
     LIFERAY_HOST="http://localhost:8080"
 
-    # Prefijo opcional de la ruta si Liferay no se sirve desde la raíz (ej. /web)
+    # Optional path prefix if Liferay is not served from the root (e.g., /web)
     LIFERAY_PATH_PREFIX="/web"
 
-    # ID del sitio de Liferay a extraer
+    # ID of the Liferay site to be extracted
     LIFERAY_SITE_ID="12345"
 
-    # Credenciales de un usuario con permisos para acceder a las APIs y páginas
+    # Credentials of a user with permissions to access the APIs and pages
     LIFERAY_API_EMAIL="test@liferay.com"
     LIFERAY_API_PASSWORD="password"
     ```
 
-2.  **Instalación de Dependencias**: Navega al directorio del extractor y ejecuta:
+2.  **Install Dependencies**: Navigate to the extractor directory and run:
     ```bash
     cd extractor/liferay-nextjs-ssg
     npm install
     ```
 
-3.  **Generación del Sitio Estático**: Ejecuta el comando de build de Next.js. Este proceso puede tardar varios minutos dependiendo de la cantidad y complejidad de las páginas.
+3.  **Static Site Generation**: Run the Next.js build command. This process can take several minutes depending on the number and complexity of the pages.
     ```bash
     npm run build
     ```
-    Este comando orquestará todo el proceso de "Scrape & Bake". El resultado final se guardará en el directorio `out`.
+    This command will orchestrate the entire "Scrape & Bake" process. The final output will be saved in the `out` directory.
 
-4.  **Verificación Local (Opcional)**: Para probar el sitio estático generado antes de desplegarlo, puedes usar el comando `start`:
+4.  **Local Verification (Optional)**: To test the generated static site before deploying, you can use the `start` command:
     ```bash
     npm run start
     ```
-    Esto levantará un servidor local en `http://localhost:3000` sirviendo el contenido del directorio `out`.
+    This will start a local server at `http://localhost:3000` serving the content from the `out` directory.
 
-5.  **Despliegue**: Copia el contenido del directorio `extractor/liferay-nextjs-ssg/out` a un servidor web estático o a un servicio de hosting/CDN de tu elección.
+5.  **Deployment**: Copy the contents of the `extractor/liferay-nextjs-ssg/out` directory to a static web server or a hosting/CDN service of your choice.
