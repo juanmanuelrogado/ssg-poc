@@ -39,12 +39,12 @@ graph TD;
     subgraph "Build Phase (CI/CD Server)"
         B("Next.js SSG Application")
         B --"1. Call getStaticPaths to get URL list"--> A
-        B --"2. For each URL, start Puppeteer"--> C{"Puppeteer (Headless Browser)"}
+        B --"2. For each URL, start Puppeteer"--> C{"Puppeteer<br>(Headless Browser)"}
         C --"3. Load Liferay page"--> A
         A --"4. Return rendered HTML & assets"--> C
         C --"5. Deliver HTML to Next.js"--> B
         B --"6. Cheerio parses HTML, downloads assets, & rewrites paths"--> B
-        B --"7. `next build` generates final files"--> D["Static Site (HTML, CSS, JS...)"]
+        B --"7. `next build` generates final files"--> D["Static Site<br>(HTML, CSS, JS...)"]
     end
 
     subgraph "Hosting/CDN"
