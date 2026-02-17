@@ -1,0 +1,77 @@
+#wrapper .at-hero-fragment {
+  --at-primary: var(--primary);
+  --at-white: var(--white);
+  --at-dark: var(--dark);
+  --at-font-weight-bold: var(--font-weight-bold);
+  --at-h1-font-size: var(--h1-font-size); /* Changed to smaller Liferay token */
+  --at-font-size-base: var(--font-size-base); /* Added for description */
+
+
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  color: var(--at-white); /* Ensure text is white */
+  padding: 80px 0;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* Align content to the start (left) */
+  text-align: left; /* Ensure text alignment is left within the fragment */
+}
+
+#wrapper .at-hero-fragment .at-hero-content {
+  position: relative;
+  z-index: 1;
+  /* Removed text-align: center; */
+  max-width: 50%; /* Limit width to align with original layout */
+  margin-left: 10%; /* Add some left margin */
+}
+
+#wrapper .at-hero-fragment .at-hero-title {
+  font-size: var(--at-h1-font-size); /* Now uses --h1-font-size */
+  font-weight: var(--at-font-weight-bold);
+  line-height: 1.2;
+  margin-bottom: 15px; /* Slightly reduced margin */
+  color: var(--at-white); /* Explicitly set title color to white */
+}
+
+#wrapper .at-hero-fragment .at-hero-description {
+  font-size: var(--at-font-size-base); /* Reduced to base font size */
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+/* Add a subtle overlay to ensure text readability over the background image */
+#wrapper .at-hero-fragment::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+  #wrapper .at-hero-fragment {
+    padding: 60px 0;
+    min-height: 300px;
+    justify-content: center; /* Center content on small screens */
+    text-align: center; /* Center text on small screens */
+  }
+
+  #wrapper .at-hero-fragment .at-hero-content {
+    max-width: 90%; /* Wider on small screens */
+    margin-left: 0; /* Remove left margin on small screens */
+  }
+
+  #wrapper .at-hero-fragment .at-hero-title {
+    font-size: 2rem; /* Adjusted for smaller screens */
+  }
+
+  #wrapper .at-hero-fragment .at-hero-description {
+    font-size: 0.9rem; /* Adjusted for smaller screens */
+  }
+}

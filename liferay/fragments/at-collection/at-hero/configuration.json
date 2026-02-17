@@ -1,0 +1,21 @@
+{
+  "fieldSets": [
+    {
+      "fields": [
+        {
+          "name": "backgroundImageUrl",
+          "label": "Background Image URL",
+          "description": "URL of the background image for the hero section",
+          "type": "url"
+        },
+        {
+          "name": "heroTitle",
+          "label": "Hero Title",
+          "description": "Main title for the hero section",
+          "type": "text",
+          "defaultValue": "Infórmate y realiza tus gestiones con la Agencia Tributaria"
+        }
+      ]
+    }
+  ]
+}

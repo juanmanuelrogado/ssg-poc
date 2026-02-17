@@ -1,0 +1,37 @@
+<section class="at-card-collection-fragment container py-5">
+  <div class="row">
+    [#list 1..6 as i]
+      [#assign cardTitle = getterUtil.getString(configuration['card' + i + 'Title'])]
+      [#assign cardLinkUrl = getterUtil.getString(configuration['card' + i + 'LinkUrl'], '#')]
+      [#assign cardDescription = getterUtil.getString(configuration['card' + i + 'Description'])]
+
+      <div class="col-12 col-md-6 mb-3 col-lg-4 js-destacado col-print-12">
+        <div class="card h-100 w-100 break-inside-avoid card-hover shadow-sm shadow-print-none border-print-0"
+             data-card-index="${i}">
+          <div class="card-body print-p-0 print-pb-3">
+            <div class="card-title d-flex">
+              <span class="card-icon mr-4 text-primary"></span>
+              <span class="config-icon" style="display: none;"
+                    data-lfr-editable-id="card${i}Icon"
+                    data-lfr-editable-type="text">&nbsp;</span>
+              <h3 class="text-primary h3 mb-0">
+                <a href="${cardLinkUrl}"
+                   title="${cardTitle}"
+                   class="stretched-link text-primary text-decoration-none card-hover-link text-break"
+                   data-lfr-editable-id="card${i}Link"
+                   data-lfr-editable-type="link">
+                  ${cardTitle}
+                </a>
+              </h3>
+            </div>
+            <p class="card-text"
+               data-lfr-editable-id="card${i}Description"
+               data-lfr-editable-type="rich-text">
+              ${cardDescription}
+            </p>
+          </div>
+        </div>
+      </div>
+    [/#list]
+  </div>
+</section>
