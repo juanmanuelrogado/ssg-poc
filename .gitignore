@@ -1,0 +1,9 @@
+# Markdown files                                                                                                                                                                                   │
+*.md                                                                                                                                                                                               │
+!README.md                                                                                                                                                                                         │
+!README_ES.md  
+
+# Fragments
+at-*.zip
+
+/resources
