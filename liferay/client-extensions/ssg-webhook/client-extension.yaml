@@ -1,4 +1,0 @@
-ssg-webhook-service:
-  name: SSG Webhook Service
-  type: oAuthApplicationHeadlessServer
-  oAuth2ApplicationExternalReferenceKey: ssg.webhook.service

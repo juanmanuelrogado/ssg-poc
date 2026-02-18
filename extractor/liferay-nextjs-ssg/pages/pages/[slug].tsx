@@ -1,8 +1,9 @@
-// extractor/liferay-nextjs-ssg/pages/pages/[slug].tsx
 import { GetStaticPaths, GetStaticProps } from 'next';
 import DOMPurify from 'isomorphic-dompurify';
 import Head from 'next/head'; // Import Head component
 import { getLiferayApiContent, getLiferayScrapedContent } from '../../src/lib/liferay'; // Updated imports
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 interface ILiferayApiPage {
   id: number;
@@ -31,20 +32,32 @@ interface PageProps {
 
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const siteId = process.env.LIFERAY_SITE_ID;
-  if (!siteId) {
-    throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+  const pagesFilePath = path.join(process.cwd(), 'pages-to-build.json');
+
+  try {
+    // Try to read the pages from the file provided by the webhook
+    const pagesToBuild = JSON.parse(await fs.readFile(pagesFilePath, 'utf-8'));
+    console.log(`[getStaticPaths] Found pages-to-build.json, using ${pagesToBuild.length} pages from webhook.`);
+    const paths = pagesToBuild.map((page: any) => ({
+        params: { slug: page.friendlyUrlPath.substring(1) }, // Assumes page object has friendlyUrlPath
+    }));
+    return { paths, fallback: 'blocking' };
+  } catch (error) {
+    // If the file doesn't exist, fall back to fetching all pages from the API
+    console.log("[getStaticPaths] pages-to-build.json not found. Falling back to fetching all site pages from Liferay API.");
+    const siteId = process.env.LIFERAY_SITE_ID;
+    if (!siteId) {
+        throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+    }
+    const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
+    const paths = allSitePagesResponse.items.map((page: any) => ({
+        params: { slug: page.friendlyUrlPath.substring(1) },
+    }));
+    return {
+        paths,
+        fallback: false,
+    };
   }
-
-  const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
-  const paths = allSitePagesResponse.items.map((page: any) => ({
-    params: { slug: page.friendlyUrlPath.substring(1) }, // Remove leading slash
-  }));
-
-  return {
-    paths,
-    fallback: false,
-  };
 };
 
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {

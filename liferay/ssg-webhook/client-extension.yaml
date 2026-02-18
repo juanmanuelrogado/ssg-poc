@@ -1,0 +1,9 @@
+ssg-webhook-service:
+  name: SSG Webhook Service
+  type: oAuthApplicationHeadlessServer
+  oAuth2ApplicationExternalReferenceKey: ssg.webhook.service
+  homePageURL: http://localhost:3001
+  scopes:
+    - Liferay.Headless.Delivery.everything.read
+    - Liferay.Headless.Admin.Common.everything.read
+    - Liferay.Headless.Admin.Common.everything.write

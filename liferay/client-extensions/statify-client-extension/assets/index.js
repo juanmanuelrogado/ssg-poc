@@ -12,10 +12,60 @@ class StatifyElement extends HTMLElement {
                     <ul id="page-list"></ul>
                 </div>
                 <button id="statify-button">Statify Selected Pages</button>
+                <div id="statify-status"></div>
             </div>
         `;
 
         this.fetchAndRenderPages();
+        this.addEventListeners();
+    }
+
+    addEventListeners() {
+        const statifyButton = this.querySelector('#statify-button');
+        statifyButton.addEventListener('click', () => this.triggerStatification());
+    }
+
+    triggerStatification() {
+        const statusDiv = this.querySelector('#statify-status');
+        statusDiv.innerHTML = 'Starting statification...';
+
+        const selectedPages = [];
+        const checkboxes = this.querySelectorAll('#page-list input[type="checkbox"]:checked');
+        checkboxes.forEach(checkbox => {
+            selectedPages.push({
+                id: checkbox.value,
+                title: checkbox.nextElementSibling.textContent,
+                friendlyUrlPath: checkbox.dataset.friendlyUrlPath
+            });
+        });
+
+        if (selectedPages.length === 0) {
+            statusDiv.innerHTML = 'Please select at least one page.';
+            return;
+        }
+
+        const webhookUrl = 'http://localhost:3001/api/v1/trigger-extraction';
+
+        fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ pages: selectedPages })
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+            statusDiv.innerHTML = `Success: ${data.message}`;
+        })
+        .catch(error => {
+            statusDiv.innerHTML = `Error: ${error.message}. Is the ssg-webhook service running?`;
+            console.error('Error triggering statification:', error);
+        });
     }
 
     fetchAndRenderPages() {
@@ -35,6 +85,8 @@ class StatifyElement extends HTMLElement {
                 })
                 .then((data) => {
                     if (data.items) {
+                        console.log('StatifyElement: Received page items from Liferay API:', data.items);
+
                         if (data.items.length === 0) {
                             pageList.innerHTML = '<li>No pages found in this site.</li>';
                         } else {
@@ -45,6 +97,7 @@ class StatifyElement extends HTMLElement {
                                 checkbox.id = `page-${page.id}`;
                                 checkbox.value = page.id;
                                 checkbox.name = 'pages';
+                                checkbox.dataset.friendlyUrlPath = page.friendlyUrlPath;
 
                                 const label = document.createElement('label');
                                 label.htmlFor = `page-${page.id}`;
@@ -64,7 +117,6 @@ class StatifyElement extends HTMLElement {
                     pageList.innerHTML = '<li>Error fetching pages. Check the browser console for details.</li>';
                 });
         } else {
-            // If Liferay object is not ready, wait and try again.
             setTimeout(() => this.fetchAndRenderPages(), 100);
         }
     }

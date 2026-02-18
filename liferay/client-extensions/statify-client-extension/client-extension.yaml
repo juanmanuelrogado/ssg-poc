@@ -12,3 +12,4 @@ statify-admin-panel:
     - index.js
   cssURLs:
     - index.css
+  useESM: true
