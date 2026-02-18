@@ -8,6 +8,10 @@ class StatifyElement extends HTMLElement {
             <div id="statify-custom-element">
                 <h1>Statify</h1>
                 <p>Select pages to statify:</p>
+                <div>
+                    <input type="checkbox" id="select-all-pages">
+                    <label for="select-all-pages">Select All</label>
+                </div>
                 <div id="page-list-container">
                     <ul id="page-list"></ul>
                 </div>
@@ -23,6 +27,14 @@ class StatifyElement extends HTMLElement {
     addEventListeners() {
         const statifyButton = this.querySelector('#statify-button');
         statifyButton.addEventListener('click', () => this.triggerStatification());
+
+        const selectAllCheckbox = this.querySelector('#select-all-pages');
+        selectAllCheckbox.addEventListener('change', (event) => {
+            const checkboxes = this.querySelectorAll('#page-list input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+            });
+        });
     }
 
     triggerStatification() {
