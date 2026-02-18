@@ -1,9 +1,19 @@
-# Markdown files                                                                                                                                                                                   │
-*.md                                                                                                                                                                                               │
-!README.md                                                                                                                                                                                         │
-!README_ES.md  
+# Ignore all Markdown files except README.md and README_ES.md
+*.md
+!README.md
+!README_ES.md
 
 # Fragments
 at-*.zip
+create*.py
 
-/resources
+/resources/
+.gemini/
+*_rendered.html
+
+# Ignore bak folders
+bak/
+*-bak/
+*-bak2/
+
+/liferay/fragments/
