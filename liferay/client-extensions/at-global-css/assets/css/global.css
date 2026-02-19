@@ -82,33 +82,6 @@ h1, h2, h3, h4, h5, h6 {
 .d-inline-block { display: inline-block !important; }
 .d-flex { display: flex !important; }
 
-/* Further common layout/spacing utilities if needed, matching bootstrap-like usage */
-.container {
-    width: 100%;
-    margin-right: auto;
-    margin-left: auto;
-    /* Consider max-width from Liferay tokens or site's specific breakpoints */
-    /* Example: max-width: var(--container-max-xl); */
-}
-
-.row {
-    display: flex;
-    flex-wrap: wrap;
-    margin-right: -15px; /* Half of typical gutter */
-    margin-left: -15px; /* Half of typical gutter */
-}
-
-.col-12 { flex: 0 0 100%; max-width: 100%; }
-.col-lg-3 { 
-    flex: 0 0 25%; 
-    max-width: 25%; 
-    position: relative;
-    width: 100%;
-    padding-right: 15px;
-    padding-left: 15px;
-}
-/* ... etc. for other cols and responsive breakpoints as needed ... */
-
 /* Simple reset for list-unstyled */
 .list-unstyled {
     padding-left: 0;
