@@ -10,8 +10,8 @@ function escapeRegex(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
-// Store SVG sprite contents globally for inlining
-const svgSpriteContents = new Map<string, string>();
+// Cache for ongoing asset downloads/processing to avoid redundant work in the same process
+const assetProcessingCache = new Map<string, Promise<string>>();
 
 const LIFERAY_API_ENDPOINT = process.env.LIFERAY_API_ENDPOINT;
 const LIFERAY_HOST = process.env.LIFERAY_HOST;
@@ -114,60 +114,73 @@ async function getLiferayFullPageHtml(pageUrl: string): Promise<{ html: string; 
 }
 
 export async function downloadAndRewriteAsset(originalAbsoluteUrl: string, assetType: string): Promise<string> {
-
   if (!originalAbsoluteUrl) {
     console.warn(`[downloadAndRewriteAsset] originalAbsoluteUrl is empty, returning a placeholder ('#').`);
     return '#';
   }
 
-  const hash = createHash('sha256').update(originalAbsoluteUrl).digest('hex');
-  const originalName = path.basename(new URL(originalAbsoluteUrl).pathname, path.extname(new URL(originalAbsoluteUrl).pathname));
-  const extension = assetType === 'styles' ? '.css' : assetType === 'scripts' ? '.js' : path.extname(new URL(originalAbsoluteUrl).pathname);
-  const localFilename = `${originalName}-${hash}${extension}`;
-
-  const localDir = path.join(process.cwd(), 'public', 'assets', assetType);
-  const localFilePath = path.join(localDir, localFilename);
-  const publicPath = `/assets/${assetType}/${localFilename}`;
-
-  await fs.mkdir(localDir, { recursive: true });
-
-  try {
-    await fs.access(localFilePath);
-    console.warn(`[downloadAndRewriteAsset] Asset already exists: ${publicPath}`);
-    return publicPath;
-  } catch {
-    // File does not exist, proceed with download
+  // Use cache to avoid redundant work in the same process
+  const cacheKey = `${assetType}:${originalAbsoluteUrl}`;
+  if (assetProcessingCache.has(cacheKey)) {
+    return assetProcessingCache.get(cacheKey)!;
   }
 
-  try {
-    const response = await fetch(originalAbsoluteUrl, {
-      headers: authHeader ? { 'Authorization': authHeader } : {},
-    });
+  const processingPromise = (async () => {
+    const hash = createHash('sha256').update(originalAbsoluteUrl).digest('hex');
+    const urlObj = new URL(originalAbsoluteUrl);
+    const originalName = path.basename(urlObj.pathname, path.extname(urlObj.pathname));
+    const extension = assetType === 'styles' ? '.css' : assetType === 'scripts' ? '.js' : path.extname(urlObj.pathname);
+    const localFilename = `${originalName}-${hash}${extension}`;
 
-    if (!response.ok) {
-      console.warn(`Failed to download asset from ${originalAbsoluteUrl}: ${response.status} - ${response.statusText}`);
-      const responseBody = await response.text();
-      console.warn(`[downloadAndRewriteAsset] Failed response body: ${responseBody}`);
-      console.warn(`[downloadAndRewriteAsset] Failed to download, returning originalAbsoluteUrl: ${originalAbsoluteUrl}`);
+    const localDir = path.join(process.cwd(), 'public', 'assets', assetType);
+    const localFilePath = path.join(localDir, localFilename);
+    const publicPath = `/assets/${assetType}/${localFilename}`;
+
+    await fs.mkdir(localDir, { recursive: true });
+
+    try {
+      await fs.access(localFilePath);
+      return publicPath;
+    } catch {
+      // File does not exist, proceed with download/processing
+    }
+
+    try {
+      const response = await fetch(originalAbsoluteUrl, {
+        headers: authHeader ? { 'Authorization': authHeader } : {},
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to download asset from ${originalAbsoluteUrl}: ${response.status} - ${response.statusText}`);
+        return originalAbsoluteUrl;
+      }
+
+      let content: Buffer | string;
+      if (assetType === 'styles' || assetType === 'scripts' || originalAbsoluteUrl.endsWith('.svg')) {
+        content = await response.text();
+        
+        // If it's a stylesheet, process its internal URLs recursively
+        if (assetType === 'styles') {
+          content = await processAndRewriteCssUrls(content, originalAbsoluteUrl);
+        }
+      } else {
+        content = Buffer.from(await response.arrayBuffer());
+      }
+      
+      // Use a temporary file and atomic rename to avoid race conditions between processes
+      const tempFilePath = `${localFilePath}.${Math.random().toString(36).substring(2)}.tmp`;
+      await fs.writeFile(tempFilePath, content);
+      await fs.rename(tempFilePath, localFilePath);
+      
+      return publicPath;
+    } catch (error) {
+      console.error(`[downloadAndRewriteAsset] Error processing URL: ${originalAbsoluteUrl}`, error);
       return originalAbsoluteUrl;
     }
+  })();
 
-    let content: Buffer | string;
-    if (assetType === 'styles' || assetType === 'scripts' || originalAbsoluteUrl.endsWith('.svg')) { // MODIFIED: Check for .svg explicitly
-      content = await response.text();
-      if (originalAbsoluteUrl.endsWith('.svg')) {
-          svgSpriteContents.set(originalAbsoluteUrl, content); // Store SVG content
-      }
-    } else {
-      content = Buffer.from(await response.arrayBuffer());
-    }
-    
-    await fs.writeFile(localFilePath, content);
-    return publicPath;
-  } catch (downloadError) {
-    console.error(`[downloadAndRewriteAsset] Error during processing for URL: ${originalAbsoluteUrl}, Type: ${assetType}`, downloadError);
-    return originalAbsoluteUrl;
-  }
+  assetProcessingCache.set(cacheKey, processingPromise);
+  return processingPromise;
 }
 
 async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Promise<string> {
@@ -190,7 +203,6 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
                 return { from: match[0], to: match[0] };
             }
 
-            console.warn(`[processAndRewriteCssUrls] Processing @import: ${importUrl} -> ${absoluteUrl}`);
             // Basic circular dependency check
             if (absoluteUrl === baseUrl) {
                 return { from: match[0], to: '' };
@@ -262,7 +274,7 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
    try {
      $ = cheerio.load(html);
    } catch (cheerioError) {
-     console.error(`[rewriteAndDownloadAssets] Error loading HTML into Cheerio. Problematic HTML (first 5000 chars): ${html.substring(0, 5000)}`, cheerioError);
+     console.error(`[rewriteAndDownloadAssets] Error loading HTML into Cheerio.`, cheerioError);
      throw cheerioError; // Re-throw to propagate the error
    }
 
@@ -421,12 +433,8 @@ async function processAndRewriteCssUrls(cssContent: string, baseUrl: string): Pr
 
    // Download and process DISCOVERED CSS URLs
    const cssDownloadPromises = discoveredCssUrls.map(url => {
-     return downloadAndRewriteAsset(url, 'styles').then(async localPath => {
+     return downloadAndRewriteAsset(url, 'styles').then(localPath => {
        extractedLinkStylePaths.push(localPath);
-       // Process content of this downloaded CSS file for internal URLs
-       const rawCssContent = await fs.readFile(path.join(process.cwd(), 'public', localPath), 'utf8');
-       const processedCssContent = await processAndRewriteCssUrls(rawCssContent, url);
-       await fs.writeFile(path.join(process.cwd(), 'public', localPath), processedCssContent);
      });
    });
    assetPromises.push(...cssDownloadPromises);

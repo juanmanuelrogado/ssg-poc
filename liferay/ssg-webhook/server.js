@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -47,36 +47,42 @@ app.post('/api/v1/trigger-extraction', (req, res) => {
 
     res.status(202).send({ message: 'Build process initiated in the background.' });
 
-    // Execute the build command with a larger buffer
+    // Execute the build command using spawn to stream output and avoid buffer limits
     console.log(`[${new Date().toISOString()}] Initiating 'npm run build' in ${projectPathAbsolute}...`);
-    exec(
-      'npm run build', 
-      { 
-        cwd: projectPathAbsolute,
-        maxBuffer: 1024 * 1024 * 10 // 10 MB
-      }, 
-      (error, stdout, stderr) => {
-        if (error) {
-          console.error(`[${new Date().toISOString()}] Error during build: ${error.message}`);
-          // Clean up the temporary file even if build fails
-          fs.unlink(tempFilePath, () => {});
-          return;
-        }
-        if (stderr) {
-          console.warn(`[${new Date().toISOString()}] Stderr during build:\n${stderr}`);
-        }
-        console.log(`[${new Date().toISOString()}] Build finished successfully:\n${stdout}`);
+    
+    const buildProcess = spawn('npm', ['run', 'build'], {
+      cwd: projectPathAbsolute,
+      shell: true
+    });
 
-        // Clean up the temporary file after the build
-        fs.unlink(tempFilePath, (unlinkErr) => {
-          if (unlinkErr) {
-            console.error(`[${new Date().toISOString()}] Error deleting temporary file ${tempFilePath}:`, unlinkErr);
-          } else {
-            console.log(`[${new Date().toISOString()}] Successfully deleted temporary file ${tempFilePath}`);
-          }
-        });
+    buildProcess.stdout.on('data', (data) => {
+      process.stdout.write(`[Build STDOUT]: ${data}`);
+    });
+
+    buildProcess.stderr.on('data', (data) => {
+      process.stderr.write(`[Build STDERR]: ${data}`);
+    });
+
+    buildProcess.on('error', (error) => {
+      console.error(`[${new Date().toISOString()}] Spawn error during build: ${error.message}`);
+    });
+
+    buildProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`[${new Date().toISOString()}] Build failed with code ${code}`);
+      } else {
+        console.log(`[${new Date().toISOString()}] Build finished successfully.`);
       }
-    );
+
+      // Clean up the temporary file
+      fs.unlink(tempFilePath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error(`[${new Date().toISOString()}] Error deleting temporary file ${tempFilePath}:`, unlinkErr);
+        } else {
+          console.log(`[${new Date().toISOString()}] Successfully deleted temporary file ${tempFilePath}`);
+        }
+      });
+    });
 
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Error writing temporary pages file:`, err);
