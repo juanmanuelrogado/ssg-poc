@@ -1,4 +1,4 @@
-# Liferay SSG Extractor with Next.js
+# Liferay SSG Extractor with Next.js (PoC)
 
 ## 1. Objective
 
@@ -19,85 +19,42 @@ This approach was chosen because it ensures the **highest visual and functional 
 
 The solution is composed of the following key elements:
 
-*   **Liferay DXP**: Acts as the source of truth and content management environment. Pages, content, widgets, and layouts are managed and rendered here.
-*   **Next.js Application (`/extractor/liferay-nextjs-ssg`)**: This is the extraction and generation engine.
-    *   **Puppeteer**: Headless browser (no GUI) that loads each public Liferay page.
-    *   **Cheerio**: A library that parses the HTML captured by Puppeteer to extract, download, and rewrite all assets and links.
-    *   **Next.js SSG Mechanism**:
-        *   `getStaticPaths`: Runs at build time to get the list of all pages that must be generated.
-        *   `getStaticProps`: Orchestrates the entire "Scrape & Bake" process for each individual page.
-*   **Static Site (`/out` directory)**: The final result of the `next build` process. It contains pure HTML, CSS, and JS files that can be deployed to any static web server or CDN.
+*   **Liferay DXP**: The source of truth for content management. It hosts the **Statify UI**.
+    *   **Statify UI (Client Extension)**: A custom element integrated into the Liferay Admin interface that allows users to select specific pages for extraction.
+*   **SSG Webhook Service (`/liferay/ssg-webhook`)**: A Node.js/Express service that acts as an orchestrator.
+    *   Receives extraction requests from the Statify UI.
+    *   Manages the build queue and coordinates the Next.js execution.
+    *   **Cumulative Build Logic**: Implements a "Backup & Merge" strategy to allow partial exports without losing previously generated content.
+*   **Next.js Extractor Engine (`/extractor/liferay-nextjs-ssg`)**: The core generation engine.
+    *   **Puppeteer**: Headless browser that captures the fully rendered state of Liferay pages.
+    *   **Cheerio**: Parses HTML to extract, download, and rewrite assets (images, CSS, JS, fonts).
+    *   **Next.js SSG**: Uses `getStaticPaths` (fed by the webhook) and `getStaticProps` to generate static HTML files.
+*   **Static Site (`/out` directory)**: The final cumulative output containing pure HTML, CSS, and JS files ready for deployment.
 
-## 4. Architecture Diagram
+## 4. Key Implementation Features
 
-```mermaid
-graph TD;
-    subgraph "Liferay DXP"
-        A["Content, Layouts & Widgets"]
-    end
+### Cumulative & Partial Exports
+The system supports exporting the entire site or just a selection of pages. When a partial export is triggered:
+1.  The existing `out` folder is backed up.
+2.  Next.js generates only the requested pages into a new `out` folder.
+3.  The webhook merges the previous content from the backup into the new folder without overwriting the new files.
+4.  This ensures the static site grows incrementally and stays up-to-date with minimal build time.
 
-    subgraph "Build Phase (CI/CD Server)"
-        B("Next.js SSG Application")
-        B --"1. Call getStaticPaths to get URL list"--> A
-        B --"2. For each URL, start Puppeteer"--> C{"Puppeteer<br>(Headless Browser)"}
-        C --"3. Load Liferay page"--> A
-        A --"4. Return rendered HTML & assets"--> C
-        C --"5. Deliver HTML to Next.js"--> B
-        B --"6. Cheerio parses HTML, downloads assets, & rewrites paths"--> B
-        B --"7. `next build` generates final files"--> D["Static Site<br>(HTML, CSS, JS...)"]
-    end
+### Asset Localization
+All external dependencies (images, stylesheets, scripts, fonts) are automatically downloaded to the `public/assets` directory within the Next.js project and their paths are rewritten in the HTML and CSS to ensure the static site is completely self-contained.
 
-    subgraph "Hosting/CDN"
-        E["Web Server / CDN (e.g., Vercel, AWS S3, Nginx)"]
-    end
+### SVG Inlining
+To handle complex icon systems like Liferay's Lexicon/Clay, the extractor identifies `<use>` tags referencing external SVG sprites, downloads the sprite, extracts the specific symbol, and inlines it directly into the HTML to ensure icons render correctly in the static version.
 
-    subgraph "End User"
-        F["User's Browser"]
-    end
+## 5. Setup & Workflow
 
-    D --> E
-    E --> F
-```
-
-## 5. Complete Workflow
-
-The process to generate and deploy the static site is as follows:
-
-1.  **Configuration**: Create a `.env.local` file in the `extractor/liferay-nextjs-ssg/` directory with the following environment variables:
-    ```
-    # Liferay API endpoint to get the list of pages
-    LIFERAY_API_ENDPOINT="http://localhost:8080/o/c"
-
-    # Host of the Liferay instance (for Puppeteer to visit)
-    LIFERAY_HOST="http://localhost:8080"
-
-    # Optional path prefix if Liferay is not served from the root (e.g., /web)
-    LIFERAY_PATH_PREFIX="/web"
-
-    # ID of the Liferay site to be extracted
-    LIFERAY_SITE_ID="12345"
-
-    # Credentials of a user with permissions to access the APIs and pages
-    LIFERAY_API_EMAIL="test@liferay.com"
-    LIFERAY_API_PASSWORD="password"
-    ```
-
-2.  **Install Dependencies**: Navigate to the extractor directory and run:
+1.  **Start the Webhook Service**:
     ```bash
-    cd extractor/liferay-nextjs-ssg
+    cd liferay/ssg-webhook
     npm install
+    npm start
     ```
-
-3.  **Static Site Generation**: Run the Next.js build command. This process can take several minutes depending on the number and complexity of the pages.
-    ```bash
-    npm run build
-    ```
-    This command will orchestrate the entire "Scrape & Bake" process. The final output will be saved in the `out` directory.
-
-4.  **Local Verification (Optional)**: To test the generated static site before deploying, you can use the `start` command:
-    ```bash
-    npm run start
-    ```
-    This will start a local server at `http://localhost:3000` serving the content from the `out` directory.
-
-5.  **Deployment**: Copy the contents of the `extractor/liferay-nextjs-ssg/out` directory to a static web server or a hosting/CDN service of your choice.
+2.  **Access Liferay**: Log in to your Liferay instance where the **Statify Client Extension** is deployed.
+3.  **Select & Statify**: Use the Statify interface to pick the pages you want to export and click "Statify Selected Pages".
+4.  **Monitor**: Follow the logs in the webhook service to see the progress of the Puppeteer scraping and Next.js building.
+5.  **Result**: The final files will be available in `extractor/liferay-nextjs-ssg/out`.
