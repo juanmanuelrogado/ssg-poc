@@ -1,0 +1,28 @@
+{
+  "fieldSets": [
+    {
+      "label": "Column 1: Novedades destacadas",
+      "fields": [
+        { "name": "column1Title", "label": "Title", "type": "text", "defaultValue": "Novedades destacadas" },
+        { "name": "column1ViewAllText", "label": "'View All' Text", "type": "text", "defaultValue": "Todas las novedades" },
+        { "name": "column1ViewAllLink", "label": "'View All' Link", "type": "url" }
+      ]
+    },
+    {
+      "label": "Column 2: Notas de prensa",
+      "fields": [
+        { "name": "column2Title", "label": "Title", "type": "text", "defaultValue": "Notas de prensa" },
+        { "name": "column2ViewAllText", "label": "'View All' Text", "type": "text", "defaultValue": "Todas las notas de prensa" },
+        { "name": "column2ViewAllLink", "label": "'View All' Link", "type": "url" }
+      ]
+    },
+    {
+      "label": "Column 3: Estadísticas",
+      "fields": [
+        { "name": "column3Title", "label": "Title", "type": "text", "defaultValue": "Estadísticas" },
+        { "name": "column3ViewAllText", "label": "'View All' Text", "type": "text", "defaultValue": "Últimas estadísticas publicadas" },
+        { "name": "column3ViewAllLink", "label": "'View All' Link", "type": "url" }
+      ]
+    }
+  ]
+}

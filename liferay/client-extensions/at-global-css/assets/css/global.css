@@ -1,0 +1,89 @@
+/* Global CSS for Agencia Tributaria Site */
+
+/* Map custom variables to Liferay Classic Theme Tokens */
+:root {
+    --at-global-primary: var(--primary); /* Liferay's primary color (blue) */
+    --at-global-secondary: var(--secondary); /* Liferay's secondary color (gray) */
+    --at-global-brand-color-3: var(--brand-color-3); /* Often used for accents, can map to site's yellow/orange */
+    --at-global-body-color: var(--body-color); /* Main text color */
+    --at-global-body-bg: var(--body-bg); /* Page background color */
+    --at-global-dark: var(--dark);
+    --at-global-light: var(--light);
+    --at-global-font-family: var(--font-family-sans-serif);
+    --at-global-font-size-base: var(--font-size-base);
+    --at-global-line-height-base: 1.5; /* Default line height */
+}
+
+/* General Body Styles */
+body {
+    font-family: var(--at-global-font-family);
+    font-size: var(--at-global-font-size-base);
+    line-height: var(--at-global-line-height-base);
+    color: var(--at-global-body-color);
+    background-color: var(--at-global-body-bg);
+    margin: 0;
+    padding: 0;
+}
+
+/* General Link Styles */
+a {
+    color: var(--at-global-primary); /* Default link color to primary */
+    text-decoration: none;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+a:hover {
+    color: var(--at-global-primary-dark); /* A slightly darker primary on hover */
+    text-decoration: underline;
+}
+
+/* Buttons (if not using specific Liferay button fragments) */
+.btn-primary {
+    background-color: var(--at-global-primary);
+    border-color: var(--at-global-primary);
+    color: var(--at-global-white);
+}
+
+.btn-primary:hover {
+    background-color: var(--at-global-primary-dark);
+    border-color: var(--at-global-primary-dark);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--at-global-dark);
+    font-weight: var(--font-weight-normal); /* Adjust as per site, but often not bold by default */
+    line-height: 1.2;
+}
+
+/* Utility Classes from the inspected HTML for general use */
+.text-primary {
+    color: var(--at-global-primary) !important;
+}
+
+.bg-primary {
+    background-color: var(--at-global-primary) !important;
+}
+
+.text-secondary {
+    color: var(--at-global-secondary) !important;
+}
+
+.bg-light-blue { /* This specific color from the site */
+    background-color: #e0f2f7 !important; 
+}
+
+.font-weight-bold {
+    font-weight: var(--font-weight-bold) !important;
+}
+
+.d-none { display: none !important; }
+.d-block { display: block !important; }
+.d-inline-block { display: inline-block !important; }
+.d-flex { display: flex !important; }
+
+/* Simple reset for list-unstyled */
+.list-unstyled {
+    padding-left: 0;
+    list-style: none;
+}

@@ -1,0 +1,15 @@
+assemble:
+  - from: assets
+    into: static
+statify-admin-panel:
+  instanceable: false
+  name: "Statify"
+  panelAppOrder: 10
+  panelCategoryKey: "site_administration.publishing"
+  type: customElement
+  htmlElementName: statify-element
+  urls:
+    - index.js
+  cssURLs:
+    - index.css
+  useESM: true

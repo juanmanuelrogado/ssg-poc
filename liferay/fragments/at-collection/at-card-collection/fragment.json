@@ -1,0 +1,11 @@
+{
+  "fragmentEntryKey": "at-card-collection",
+  "name": "Agencia Tributaria Card Collection",
+  "type": "section",
+  "htmlPath": "index.html",
+  "cssPath": "index.css",
+  "jsPath": "index.js",
+  "configurationPath": "configuration.json",
+  "thumbnailPath": "thumbnail.png",
+  "icon": "cards"
+}

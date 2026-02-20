@@ -1,8 +1,9 @@
-// extractor/liferay-nextjs-ssg/pages/pages/[slug].tsx
 import { GetStaticPaths, GetStaticProps } from 'next';
 import DOMPurify from 'isomorphic-dompurify';
-import Head from 'next/head'; // Import Head component
-import { getLiferayApiContent, getLiferayScrapedContent } from '../../src/lib/liferay'; // Updated imports
+import Head from 'next/head';
+import { getLiferayApiContent, getLiferayScrapedContent } from '../../src/lib/liferay';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 interface ILiferayApiPage {
   id: number;
@@ -23,27 +24,36 @@ interface ILiferayPagePropsData {
 interface PageProps {
   pageData: ILiferayPagePropsData | null;
   error?: string;
-  extractedStyles?: string[]; // Prop for inline CSS
-  extractedLinkStyles?: string[]; // Prop for linked CSS (local paths)
-  extractedScriptPaths?: string[]; // Prop for linked JS (local paths)
+  extractedStyles?: string[];
+  extractedLinkStyles?: string[];
+  extractedScriptPaths?: string[];
 }
 
-
-
 export const getStaticPaths: GetStaticPaths = async () => {
-  const siteId = process.env.LIFERAY_SITE_ID;
-  if (!siteId) {
-    throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+  const pagesFilePath = path.join(process.cwd(), 'pages-to-build.json');
+  let pagesToBuild: any[] = [];
+
+  try {
+    const fileContent = await fs.readFile(pagesFilePath, 'utf-8');
+    pagesToBuild = JSON.parse(fileContent);
+    console.log(`[getStaticPaths] Found pages-to-build.json, using ${pagesToBuild.length} pages from webhook.`);
+  } catch (error) {
+    console.log("[getStaticPaths] pages-to-build.json not found. Falling back to fetching all site pages from Liferay API.");
+    const siteId = process.env.LIFERAY_SITE_ID;
+    if (!siteId) {
+      throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
+    }
+    const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
+    pagesToBuild = allSitePagesResponse.items;
   }
 
-  const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
-  const paths = allSitePagesResponse.items.map((page: any) => ({
-    params: { slug: page.friendlyUrlPath.substring(1) }, // Remove leading slash
+  const paths = pagesToBuild.map((page: any) => ({
+    params: { slug: page.friendlyUrlPath.substring(1).split('/') },
   }));
 
   return {
     paths,
-    fallback: false,
+    fallback: 'blocking',
   };
 };
 
@@ -53,8 +63,8 @@ export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
     throw new Error('LIFERAY_SITE_ID is not defined in .env.local');
   }
 
-  const slug = params?.slug as string;
-  const friendlyUrlPath = `/${slug}`;
+  const slugParts = params?.slug as string[];
+  const friendlyUrlPath = `/${slugParts.join('/')}`;
 
   try {
     const allSitePagesResponse = await getLiferayApiContent(`/v1.0/sites/${siteId}/site-pages`, 100);
@@ -67,13 +77,12 @@ export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
       });
       targetPage = allSitePagesResponse.items.find((page: ILiferayApiPage) => page.friendlyUrlPath === friendlyUrlPath);
     }
-    
+
     if (targetPage) {
-      // Construct the public-facing URL for Puppeteer
       const liferayPathPrefix = process.env.LIFERAY_PATH_PREFIX || '';
-      const publicLiferayPageUrl = `${process.env.LIFERAY_HOST}${liferayPathPrefix}${friendlyUrlPath}`; // Use LIFERAY_HOST
+      const publicLiferayPageUrl = `${process.env.LIFERAY_HOST}${liferayPathPrefix}${friendlyUrlPath}`;
       
-      const { html: rawHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await getLiferayScrapedContent(publicLiferayPageUrl, allFriendlyUrlPaths); 
+      const { html: rawHtml, extractedStyles, extractedLinkStyles, extractedScriptPaths } = await getLiferayScrapedContent(publicLiferayPageUrl, allFriendlyUrlPaths);
       const renderedHtml = DOMPurify.sanitize(rawHtml);
 
       return {
@@ -133,11 +142,9 @@ const LiferayPage = ({ pageData, error, extractedStyles, extractedLinkStyles, ex
           <script key={`script-${index}`} src={path} defer />
         ))}
       </Head>
-      {/* Minimal wrapper to avoid interference from Next.js's default styles/layout */}
       <div className="liferay-extracted-page">
-
         <div
-          className="prose dark:prose-invert" // Use Tailwind Typography if available, or custom styles
+          className="prose dark:prose-invert"
           dangerouslySetInnerHTML={{ __html: pageData!.renderedHtml }}
         />
       </div>

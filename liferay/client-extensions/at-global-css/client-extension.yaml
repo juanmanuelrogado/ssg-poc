@@ -1,0 +1,8 @@
+assemble:
+  - from: assets
+    into: static
+
+at-global-css:
+  name: "AT Global CSS"
+  type: globalCSS
+  url: "css/global.css"

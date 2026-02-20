@@ -1,0 +1,55 @@
+#wrapper .at-news-fragment {
+  --at-primary: var(--primary);
+  --at-h1-font-size: var(--h1-font-size);
+  --at-h3-font-size: var(--h3-font-size);
+  --at-h5-font-size: var(--h5-font-size);
+  --at-font-weight-bold: var(--font-weight-bold);
+  --at-spacer-3: var(--spacer-3); /* 1rem */
+}
+
+#wrapper .at-news-fragment h2 {
+  font-size: var(--at-h1-font-size);
+  font-weight: var(--at-font-weight-bold);
+  margin-bottom: var(--at-spacer-3);
+}
+
+#wrapper .at-news-fragment h3 {
+  font-size: var(--at-h3-font-size);
+  margin-bottom: var(--at-spacer-3);
+}
+
+#wrapper .at-news-fragment .list-unstyled {
+  list-style: none;
+  padding: 0;
+}
+
+#wrapper .at-news-fragment .list-unstyled li {
+  position: relative;
+  margin-bottom: var(--at-spacer-3);
+  /* Removed padding-left: 20px; */
+}
+
+/* Removed the ::before pseudo-element */
+
+#wrapper .at-news-fragment .list-unstyled time {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--gray-600);
+  margin-bottom: 0.25rem;
+}
+
+#wrapper .at-news-fragment .list-unstyled a {
+  text-decoration: none;
+  color: var(--at-primary); /* Changed to primary color */
+  font-weight: normal;
+}
+
+#wrapper .at-news-fragment .list-unstyled a:hover {
+  text-decoration: underline;
+  color: var(--primary);
+}
+
+#wrapper .at-news-fragment .h5 {
+  font-size: var(--at-h5-font-size);
+}

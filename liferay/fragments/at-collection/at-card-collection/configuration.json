@@ -1,0 +1,178 @@
+{
+  "fieldSets": [
+    {
+      "label": "Card 1",
+      "fields": [
+        {
+          "name": "card1DefaultIcon",
+          "label": "Card 1 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "pencil"
+        },
+        {
+          "name": "card1Title",
+          "label": "Card 1 Title",
+          "type": "text",
+          "defaultValue": "Presentación de declaraciones, calendario del contribuyente"
+        },
+        {
+          "name": "card1LinkUrl",
+          "label": "Card 1 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card1Description",
+          "label": "Card 1 Description",
+          "type": "text",
+          "defaultValue": "Accede a todas las declaraciones, modelos y formularios, y a sus plazos de presentación"
+        }
+      ]
+    },
+    {
+      "label": "Card 2",
+      "fields": [
+        {
+          "name": "card2DefaultIcon",
+          "label": "Card 2 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "document"
+        },
+        {
+          "name": "card2Title",
+          "label": "Card 2 Title",
+          "type": "text",
+          "defaultValue": "Declaraciones informativas 2025"
+        },
+        {
+          "name": "card2LinkUrl",
+          "label": "Card 2 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card2Description",
+          "label": "Card 2 Description",
+          "type": "text",
+          "defaultValue": "Información y gestiones disponibles"
+        }
+      ]
+    },
+    {
+      "label": "Card 3",
+      "fields": [
+        {
+          "name": "card3DefaultIcon",
+          "label": "Card 3 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "calendar"
+        },
+        {
+          "name": "card3Title",
+          "label": "Card 3 Title",
+          "type": "text",
+          "defaultValue": "Calendario del contribuyente"
+        },
+        {
+          "name": "card3LinkUrl",
+          "label": "Card 3 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card3Description",
+          "label": "Card 3 Description",
+          "type": "text",
+          "defaultValue": "Cuándo tienes que presentar tus declaraciones tributarias"
+        }
+      ]
+    },
+    {
+      "label": "Card 4",
+      "fields": [
+        {
+          "name": "card4DefaultIcon",
+          "label": "Card 4 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "info-circle"
+        },
+        {
+          "name": "card4Title",
+          "label": "Card 4 Title",
+          "type": "text",
+          "defaultValue": "Medidas fiscales urgentes por daños DANA"
+        },
+        {
+          "name": "card4LinkUrl",
+          "label": "Card 4 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card4Description",
+          "label": "Card 4 Description",
+          "type": "text",
+          "defaultValue": "Información y gestiones disponibles"
+        }
+      ]
+    },
+    {
+      "label": "Card 5",
+      "fields": [
+        {
+          "name": "card5DefaultIcon",
+          "label": "Card 5 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "document"
+        },
+        {
+          "name": "card5Title",
+          "label": "Card 5 Title",
+          "type": "text",
+          "defaultValue": "Campaña de Renta 2024"
+        },
+        {
+          "name": "card5LinkUrl",
+          "label": "Card 5 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card5Description",
+          "label": "Card 5 Description",
+          "type": "text",
+          "defaultValue": "Información y gestiones disponibles"
+        }
+      ]
+    },
+    {
+      "label": "Card 6",
+      "fields": [
+        {
+          "name": "card6DefaultIcon",
+          "label": "Card 6 Default Icon",
+          "description": "Default Clay icon if none is set via in-page editing.",
+          "type": "text",
+          "defaultValue": "info-circle"
+        },
+        {
+          "name": "card6Title",
+          "label": "Card 6 Title",
+          "type": "text",
+          "defaultValue": "Mutualistas: solicitudes de devolución"
+        },
+        {
+          "name": "card6LinkUrl",
+          "label": "Card 6 Link URL",
+          "type": "url"
+        },
+        {
+          "name": "card6Description",
+          "label": "Card 6 Description",
+          "type": "text",
+          "defaultValue": "Información para solicitar tu devolución"
+        }
+      ]
+    }
+  ]
+}

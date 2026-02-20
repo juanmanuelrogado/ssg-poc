@@ -1,0 +1,76 @@
+#wrapper .at-card-collection-fragment {
+  --at-primary: var(--primary);
+  --at-white: var(--white);
+  --at-gray-200: var(--gray-200);
+  --at-font-weight-bold: var(--font-weight-bold);
+  --at-h3-font-size: var(--h3-font-size);
+  --at-spacer-3: var(--spacer-3); /* 1rem */
+
+  padding: var(--at-spacer-3) 0;
+}
+
+#wrapper .at-card-collection-fragment .card {
+  border: 1px solid var(--at-gray-200); /* Lighter border */
+  border-radius: var(--border-radius); /* Bootstrap-like border-radius */
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  overflow: hidden; /* Ensures shadow/hover effects stay within bounds */
+}
+
+#wrapper .at-card-collection-fragment .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); /* Slightly stronger shadow on hover */
+}
+
+#wrapper .at-card-collection-fragment .card-body {
+  padding: var(--at-spacer-3);
+}
+
+#wrapper .at-card-collection-fragment .card-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--at-spacer-3); /* Space between title and description */
+}
+
+#wrapper .at-card-collection-fragment .card-title svg {
+  margin-right: 1rem; /* Space between icon and text */
+  color: var(--at-primary);
+  flex-shrink: 0; /* Prevent icon from shrinking */
+  width: 24px; /* Adjust icon size */
+  height: 24px;
+}
+
+#wrapper .at-card-collection-fragment .card-title h3 {
+  font-size: var(--at-h3-font-size);
+  font-weight: var(--at-font-weight-bold);
+  margin-bottom: 0;
+}
+
+#wrapper .at-card-collection-fragment .card-title h3 a {
+  color: var(--at-primary);
+  text-decoration: none;
+}
+
+#wrapper .at-card-collection-fragment .card-title h3 a:hover {
+  text-decoration: underline;
+}
+
+#wrapper .at-card-collection-fragment .card-text {
+  font-size: var(--font-size-base); /* Base font size for description */
+  line-height: 1.5;
+  color: var(--gray-700); /* Darker gray for readability */
+}
+
+/* Responsive adjustments */
+@media (min-width: 992px) { /* Equivalent to Bootstrap's lg breakpoint for 3 cards per row */
+  #wrapper .at-card-collection-fragment .col-lg-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+  }
+}
+
+@media (max-width: 767px) { /* Equivalent to Bootstrap's md breakpoint for 2 cards per row */
+  #wrapper .at-card-collection-fragment .col-md-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}

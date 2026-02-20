@@ -1,0 +1,51 @@
+/* index.css for Statify Custom Element */
+#statify-custom-element {
+    padding: 20px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    margin: 20px;
+}
+
+#page-list-container {
+    margin-top: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #fff;
+}
+
+#page-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#page-list li {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#page-list li:not(:last-child) {
+    border-bottom: none;
+}
+
+#page-list input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+#statify-button {
+    margin-top: 20px;
+    padding: 10px 15px;
+    background-color: #0b5fff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#statify-button:hover {
+    background-color: #004ad7;
+}

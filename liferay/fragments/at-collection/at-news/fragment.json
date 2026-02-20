@@ -1,0 +1,11 @@
+{
+  "fragmentEntryKey": "at-news",
+  "name": "Agencia Tributaria News",
+  "type": "section",
+  "htmlPath": "index.html",
+  "cssPath": "index.css",
+  "jsPath": "index.js",
+  "configurationPath": "configuration.json",
+  "thumbnailPath": "thumbnail.png",
+  "icon": "news"
+}
