@@ -109,10 +109,19 @@ class StatifyElement extends HTMLElement {
             throw new Error('Network response was not ok.');
         })
         .then(data => {
-            statusDiv.innerHTML = `${this.t('success')}${data.message}`;
+            // Localize known messages from the backend
+            let message = data.message;
+            if (message === 'Build process initiated in the background.') {
+                message = this.t('starting');
+            }
+            statusDiv.innerHTML = `${this.t('success')}${message}`;
         })
         .catch(error => {
-            statusDiv.innerHTML = `${this.t('error')}${error.message}. ${this.t('webhookError')}`;
+            let message = error.message;
+            if (message === 'Network response was not ok.') {
+                message = this.t('couldNotRetrieve');
+            }
+            statusDiv.innerHTML = `${this.t('error')}${message}. ${this.t('webhookError')}`;
             console.error('Error triggering statification:', error);
         });
     }
