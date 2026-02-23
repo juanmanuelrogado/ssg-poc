@@ -1,21 +1,58 @@
+const LOCALIZED_LABELS = {
+    'en_US': {
+        'title': 'Statify',
+        'subtitle': 'Select pages to statify:',
+        'selectAll': 'Select All',
+        'statifyButton': 'Statify Selected Pages',
+        'starting': 'Starting statification...',
+        'selectAtLeastOne': 'Please select at least one page.',
+        'success': 'Success: ',
+        'error': 'Error: ',
+        'webhookError': 'Is the ssg-webhook service running?',
+        'noPages': 'No pages found in this site.',
+        'couldNotRetrieve': 'Could not retrieve pages.',
+        'errorFetching': 'Error fetching pages. Check the browser console for details.'
+    },
+    'es_ES': {
+        'title': 'Estatificar',
+        'subtitle': 'Seleccione las páginas para estatificar:',
+        'selectAll': 'Seleccionar todo',
+        'statifyButton': 'Estatificar páginas seleccionadas',
+        'starting': 'Iniciando estatificación...',
+        'selectAtLeastOne': 'Por favor, seleccione al menos una página.',
+        'success': 'Éxito: ',
+        'error': 'Error: ',
+        'webhookError': '¿Está el servicio ssg-webhook en funcionamiento?',
+        'noPages': 'No se han encontrado páginas en este sitio.',
+        'couldNotRetrieve': 'No se han podido recuperar las páginas.',
+        'errorFetching': 'Error al recuperar las páginas. Consulte la consola del navegador para más detalles.'
+    }
+};
+
 class StatifyElement extends HTMLElement {
     constructor() {
         super();
+        this.languageId = (window.Liferay && Liferay.ThemeDisplay && Liferay.ThemeDisplay.getLanguageId()) || 'en_US';
+        this.labels = LOCALIZED_LABELS[this.languageId] || LOCALIZED_LABELS['en_US'];
+    }
+
+    t(key) {
+        return this.labels[key] || key;
     }
 
     connectedCallback() {
         this.innerHTML = `
             <div id="statify-custom-element">
-                <h1>Statify</h1>
-                <p>Select pages to statify:</p>
+                <h1>${this.t('title')}</h1>
+                <p>${this.t('subtitle')}</p>
                 <div>
                     <input type="checkbox" id="select-all-pages">
-                    <label for="select-all-pages">Select All</label>
+                    <label for="select-all-pages">${this.t('selectAll')}</label>
                 </div>
                 <div id="page-list-container">
                     <ul id="page-list"></ul>
                 </div>
-                <button id="statify-button">Statify Selected Pages</button>
+                <button id="statify-button">${this.t('statifyButton')}</button>
                 <div id="statify-status"></div>
             </div>
         `;
@@ -39,7 +76,7 @@ class StatifyElement extends HTMLElement {
 
     triggerStatification() {
         const statusDiv = this.querySelector('#statify-status');
-        statusDiv.innerHTML = 'Starting statification...';
+        statusDiv.innerHTML = this.t('starting');
 
         const selectedPages = [];
         const checkboxes = this.querySelectorAll('#page-list input[type="checkbox"]:checked');
@@ -52,7 +89,7 @@ class StatifyElement extends HTMLElement {
         });
 
         if (selectedPages.length === 0) {
-            statusDiv.innerHTML = 'Please select at least one page.';
+            statusDiv.innerHTML = this.t('selectAtLeastOne');
             return;
         }
 
@@ -72,10 +109,10 @@ class StatifyElement extends HTMLElement {
             throw new Error('Network response was not ok.');
         })
         .then(data => {
-            statusDiv.innerHTML = `Success: ${data.message}`;
+            statusDiv.innerHTML = `${this.t('success')}${data.message}`;
         })
         .catch(error => {
-            statusDiv.innerHTML = `Error: ${error.message}. Is the ssg-webhook service running?`;
+            statusDiv.innerHTML = `${this.t('error')}${error.message}. ${this.t('webhookError')}`;
             console.error('Error triggering statification:', error);
         });
     }
@@ -100,7 +137,7 @@ class StatifyElement extends HTMLElement {
                         console.log('StatifyElement: Building hierarchy from paths');
 
                         if (data.items.length === 0) {
-                            pageList.innerHTML = '<li>No pages found in this site.</li>';
+                            pageList.innerHTML = `<li>${this.t('noPages')}</li>`;
                         } else {
                             pageList.innerHTML = '';
                             const pagesById = {};
@@ -200,12 +237,12 @@ class StatifyElement extends HTMLElement {
                             renderTree(rootPages, pageList);
                         }
                     } else {
-                         pageList.innerHTML = '<li>Could not retrieve pages.</li>';
+                         pageList.innerHTML = `<li>${this.t('couldNotRetrieve')}</li>`;
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching pages:', error);
-                    pageList.innerHTML = '<li>Error fetching pages. Check the browser console for details.</li>';
+                    pageList.innerHTML = `<li>${this.t('errorFetching')}</li>`;
                 });
         } else {
             setTimeout(() => this.fetchAndRenderPages(), 100);

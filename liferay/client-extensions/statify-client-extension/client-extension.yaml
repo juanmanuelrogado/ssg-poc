@@ -1,6 +1,7 @@
 assemble:
   - from: assets
     into: static
+
 statify-admin-panel:
   instanceable: false
   name: "Statify"
